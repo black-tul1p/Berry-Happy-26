@@ -1,0 +1,1840 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Birthday Treasure Hunt</title>
+<meta name="theme-color" content="#1a1240">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🎂%3C/text%3E%3C/svg%3E">
+<style>
+  :root { --ink:#3b2a1a; --paper:#f3e3bd; --sea:#1f5560; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#1a1240; font-family:Georgia,serif; color:var(--ink);
+         display:flex; flex-direction:column; align-items:center; height:100vh; height:100dvh; overflow:hidden; }
+  #stage { flex:1; min-height:0; width:100%; display:flex; align-items:center; justify-content:center; padding:0 8px 8px; }
+  h1 { color:var(--paper); margin:10px 8px 2px; font-size:clamp(1rem, 2.6vw, 1.4rem); text-align:center; }
+  #hud { color:var(--paper); margin-bottom:6px; font-size:clamp(.8rem, 2vw, 1rem); text-align:center; }
+  canvas { background:var(--sea); border:6px solid #3b2a1a; outline:3px solid #7a8f6a; border-radius:10px; touch-action:none; flex:none; }   /* sized by fit() to the space left in the window */
+  #overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+             background:rgba(10,30,45,.55); }
+  .card { background:var(--paper); border:4px solid #5a3a1c; border-radius:8px; padding:24px 32px;
+          max-width:440px; max-height:calc(100% - 16px); margin:0 10px; overflow:auto; text-align:center; box-shadow:0 8px 30px #0008; }
+  @media (max-height:760px), (max-width:520px) { .card { padding:12px 18px; font-size:14px; } .card h2 { margin:0 0 6px; } .card p { margin:6px 0; } button { margin-top:6px; padding:6px 16px; } }
+  .card { position:relative; }
+  .card h2 { margin-top:0; }
+  .mutebtn { position:absolute; top:8px; right:8px; margin:0; padding:2px 8px; font-size:1.05rem; background:#8a6a35; border-width:2px; }
+  .poster h2 { font-size:2rem; letter-spacing:.2em; margin:0; }
+  button { font:inherit; font-size:1.1rem; padding:8px 20px; border:3px solid #5a3a1c; background:#c0392b;
+           color:#fff; border-radius:6px; cursor:pointer; margin-top:12px; }
+  input { font:inherit; padding:6px; text-align:center; border:2px solid #5a3a1c; border-radius:4px; }
+  .portraits { display:flex; gap:12px; justify-content:center; margin:0 auto 10px; }
+  .portraits .portrait { margin:0; max-width:42%; }
+  #overlay { z-index:50; transition:background .5s, backdrop-filter .5s, -webkit-backdrop-filter .5s; }      /* above the board and header, below confetti and the test button */
+  #overlay.gated { background:rgba(8,24,34,.82); -webkit-backdrop-filter:blur(22px); backdrop-filter:blur(22px); }   /* hide the board until the first tap */
+  #gate { max-width:360px; }
+  .gateicon { font-size:3.4rem; line-height:1.1; animation:gatebob 1.6s ease-in-out infinite; }
+  @keyframes gatebob { 50% { transform:translateY(-6px) rotate(-4deg); } }
+  .gatehint { margin-top:8px; font-size:.8rem; color:#6b4f28; }
+  #start { max-width:640px; }
+  .startwrap { display:flex; gap:18px; align-items:center; justify-content:center; text-align:center; }
+  .starttext { flex:1 1 280px; min-width:0; }
+  .introbox { position:relative; flex:0 0 auto; height:min(380px, 56vh); aspect-ratio:9 / 16; background:#000; border:3px solid #5a3a1c; border-radius:12px; overflow:hidden; }
+  .introbox video { display:block; width:100%; height:100%; object-fit:contain; background:#000; }
+  @media (max-width:560px) { .startwrap { flex-direction:column; gap:10px; } .introbox { height:min(300px, 40vh); } }
+  .introbox.missing { background:repeating-linear-gradient(45deg,#ead9ad,#ead9ad 8px,#e3cf9d 8px,#e3cf9d 16px); border:3px dashed #8a6a35; display:flex; align-items:center; justify-content:center; text-align:center; color:#6b4f28; font-size:2rem; line-height:1.3; }
+  .introbox.missing small { font-size:.7rem; }
+  .vbar { position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(255,255,255,.25); } .vbar i { display:block; height:100%; width:0; background:#ffd24a; }
+  .vbtn { position:absolute; margin:0; padding:3px 10px; font-size:.85rem; background:rgba(20,20,20,.7); border:2px solid rgba(255,255,255,.7); }
+  .vmute { right:8px; top:8px; } .vplay { left:50%; top:50%; transform:translate(-50%,-50%); font-size:1.3rem; padding:8px 20px; background:#c0392b; }
+  #go:disabled { background:#9b9588; border-color:#6b665a; color:#e8e4d8; cursor:not-allowed; opacity:.8; filter:grayscale(.7); }
+  .portrait { position:relative; width:clamp(72px, 19vh, 116px); aspect-ratio:1; margin:0 auto 10px; border:3px dashed #8a6a35;
+              border-radius:10px; background:repeating-linear-gradient(45deg,#ead9ad,#ead9ad 8px,#e3cf9d 8px,#e3cf9d 16px);
+              display:flex; flex-direction:column; align-items:center; justify-content:center; color:#6b4f28; overflow:hidden; }
+  .portrait .ph-initial { font-size:2.4rem; font-weight:bold; line-height:1; }
+  .portrait .ph-hint { font-size:.62rem; margin-top:4px; padding:0 4px; opacity:.85; word-break:break-all; }
+  .portrait img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#e6d2a0; }
+  .note { margin:2px 4px 12px; padding:9px 14px; background:rgba(255,255,255,.6); border:2px dashed #c0617a; border-radius:10px; color:#4a2a2a; font-size:.98rem; line-height:1.4; }
+  .note::before { content:'💌 '; }
+  .qnav { display:flex; align-items:center; justify-content:center; gap:12px; margin:0 0 4px; font-size:.9rem; }
+  .qbtn { margin:0; padding:2px 12px; font-size:1rem; background:#8a6a35; }
+  .card.wide { max-width:660px; }
+  .pickgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(128px, 1fr)); gap:8px; margin-top:10px; }
+  .pickbtn { margin:0; padding:6px 6px 8px; font-size:.8rem; background:#f7ecd0; color:#3b2a1a; border:3px solid #8a6a35; border-radius:10px;
+             display:flex; flex-direction:column; align-items:center; gap:1px; position:relative; cursor:pointer; }
+  .pickbtn.used { filter:grayscale(1); opacity:.42; cursor:not-allowed; background:#e4dcc6; }
+  .pickbtn.used:hover { border-color:#8a6a35; background:#e4dcc6; }
+  .pickbtn:hover:not(.used), .pickbtn:focus-visible:not(.used) { background:#fff4c9; border-color:#c0392b; }
+  .pickbtn img { width:66px; height:59px; }
+  .pickbtn b { font-size:.98rem; } .pickbtn i { color:#c0392b; font-size:.82rem; }
+  .pickbtn small { font-size:.7rem; line-height:1.2; color:#5a4630; }
+  .pk-n { position:absolute; top:3px; left:7px; font-weight:bold; color:#8a6a35; }
+  @media (max-height:760px) { .pickbtn img { width:46px; height:41px; } .pickbtn small { font-size:.64rem; } .pickgrid { gap:5px; } }
+  /* ---- Wano night-scene behind the game ---- */
+  #bgscene { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; background:#1a1240; }
+  #bgscene > svg { position:absolute; inset:0; width:100%; height:100%; }
+  h1, #hud, #stage { position:relative; z-index:1; }
+  h1 { text-shadow:0 2px 10px rgba(20,8,50,.85); } #hud { text-shadow:0 2px 8px rgba(20,8,50,.85); }
+  .star { animation:twinkle 3.2s ease-in-out infinite; }
+  @keyframes twinkle { 0%, 100% { opacity:.25; } 50% { opacity:1; } }
+  .kumo { animation:kumoDrift linear infinite; }
+  @keyframes kumoDrift { from { transform:translateX(-380px); } to { transform:translateX(1980px); } }
+  .lantern { transform-box:fill-box; transform-origin:50% 0; animation:lanternSwing 4.2s ease-in-out infinite alternate; }
+  @keyframes lanternSwing { from { transform:rotate(-4deg); } to { transform:rotate(4deg); } }
+  .petal { position:absolute; top:-6vh; width:var(--s, 10px); height:var(--s, 10px); background:radial-gradient(circle at 30% 30%, #ffe3ef, #ff9fc6); border-radius:80% 0 80% 0; opacity:.9; animation:petalFall linear infinite; }
+  @keyframes petalFall { 0% { transform:translate3d(0, 0, 0) rotate(0deg); } 50% { transform:translate3d(var(--dx, 40px), 55vh, 0) rotate(260deg); } 100% { transform:translate3d(calc(var(--dx, 40px) * -0.6), 112vh, 0) rotate(540deg); } }
+  @media (prefers-reduced-motion: reduce) { .star, .kumo, .lantern, .petal { animation:none; } }
+  .lives { display:inline-flex; gap:4px; vertical-align:middle; min-height:18px; }
+  .lives .hat { display:block; }
+  /* ---- the win sequence: pastel purple, sparkles, soft glow ---- */
+  #overlay.win:not(.gated) { background:rgba(58, 32, 104, .6); }
+  .card.win { color:#3f2a68; border:4px solid #b79be6;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cg fill='%23ffffff' opacity='.85'%3E%3Cpath d='M20 12l2 6 6 2-6 2-2 6-2-6-6-2 6-2z'/%3E%3Ccircle cx='66' cy='28' r='2'/%3E%3Cpath d='M72 64l1.5 4.5 4.5 1.5-4.5 1.5-1.5 4.5-1.5-4.5-4.5-1.5 4.5-1.5z'/%3E%3C/g%3E%3Cg fill='%23ffc2e6' opacity='.9'%3E%3Ccircle cx='30' cy='70' r='1.8'/%3E%3Ccircle cx='84' cy='88' r='1.4'/%3E%3Cpath d='M52 46l1.2 3.6 3.6 1.2-3.6 1.2-1.2 3.6-1.2-3.6-3.6-1.2 3.6-1.2z'/%3E%3C/g%3E%3C/svg%3E"),
+      radial-gradient(ellipse at 18% 8%, rgba(255,255,255,.75) 0%, rgba(255,255,255,0) 46%),
+      radial-gradient(ellipse at 90% 100%, rgba(255,190,232,.55) 0%, rgba(255,190,232,0) 50%),
+      linear-gradient(160deg, #efe6ff 0%, #e3d6fb 48%, #d3c4f5 100%);
+    box-shadow:0 0 0 3px rgba(255,255,255,.75) inset, 0 0 0 7px rgba(183,155,230,.55) inset, 0 12px 38px rgba(70,40,130,.55), 0 0 36px rgba(190,150,255,.45); }
+  .card.win h2, .card.win .memtitle { color:#4b2f86; text-shadow:0 2px 0 rgba(255,255,255,.85), 0 0 14px rgba(255,255,255,.7); }
+  .card.win button:not(.mutebtn):not(.qbtn):not(.pickbtn) { background:linear-gradient(#a384e8, #8564d6); border-color:#5a3d9a; color:#fff; text-shadow:0 1px 0 rgba(60,30,120,.5); box-shadow:0 3px 0 #5a3d9a, 0 6px 14px rgba(90,60,160,.4); }
+  .card.win .mutebtn, .card.win .qbtn { background:#8564d6; border-color:#5a3d9a; }
+  .card.win .note { background:rgba(255,255,255,.7); border-color:#c486d6; color:#4a2a5e; }
+  .card.win .cakehint, .card.win .gatehint { color:#6a4ea0; }
+  .card.win .cakecount { color:#4b2f86; }
+  .card.win p, .card.win .qnav { color:#3f2a68; }
+  .card.cake { max-width:680px; overflow:hidden; }
+  .cakewrap { position:relative; width:min(100%, 600px); margin:0 auto; }
+  .cakewrap svg { display:block; width:100%; max-height:46vh; touch-action:none; cursor:crosshair; }
+  .candle { cursor:pointer; }
+  .flame { transform-box:fill-box; transform-origin:50% 100%; animation:flick .17s ease-in-out infinite alternate; }
+  @keyframes flick { from { transform:scale(1, 1) rotate(-4deg); } to { transform:scale(.9, 1.14) rotate(4deg); } }
+  .glow { animation:glowp .7s ease-in-out infinite alternate; }
+  @keyframes glowp { from { opacity:.35; } to { opacity:.6; } }
+  .candle.out .flame, .candle.out .glow { display:none; }
+  .smoke { opacity:0; transform-box:fill-box; }
+  .candle.out .smoke { animation:smoke 1.8s ease-out forwards; }
+  @keyframes smoke { 0% { opacity:.75; transform:translateY(0) scale(1); } 100% { opacity:0; transform:translateY(-30px) scale(1.8); } }
+  .cakehint { font-size:.85rem; color:#6b4f28; margin:2px 0 6px; min-height:1.2em; }
+  .cakecount { font-weight:bold; font-size:1.05rem; margin:2px 0; }
+  .cakebtns { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+  .cakebtns button { margin:4px 0 0; font-size:1rem; padding:6px 14px; }
+  .card.memories { max-width:720px; overflow:hidden; }
+  .memtitle { margin:0 0 6px; font-size:clamp(1.1rem, 4vw, 1.6rem); }
+  .membox { position:relative; width:min(100%, 640px); max-height:52vh; aspect-ratio:16 / 10; margin:6px auto 8px; border:4px solid #4a2f19; border-radius:12px; overflow:hidden;
+            background:repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 2px, transparent 2px 52px), linear-gradient(#9a6a3e, #6f4727);
+            box-shadow:inset 0 0 40px rgba(0,0,0,.45); }
+  .polaroid { position:absolute; width:21%; padding:2.2% 2.2% 0; background:#fffdf5; border-radius:3px; box-shadow:0 8px 16px rgba(0,0,0,.5); opacity:0; transform:rotate(var(--r)); }
+  .polaroid::before { content:''; position:absolute; top:-3.5%; left:50%; width:34%; height:7%; transform:translateX(-50%) rotate(-3deg); background:rgba(255,222,120,.8); box-shadow:0 1px 2px rgba(0,0,0,.25); }
+  .polaroid img { display:block; width:100%; aspect-ratio:1; object-fit:cover; background:#ddd; }
+  .polaroid .cap { padding:7% 0 8%; text-align:center; font:italic 700 clamp(.7rem, 2vw, 1.05rem) "Segoe Script","Bradley Hand","Snell Roundhand","Comic Sans MS",cursive; color:#7a3a4a; }
+  .polaroid.in { animation:polaDrop .6s cubic-bezier(.2, 1.35, .4, 1) forwards; }
+  @keyframes polaDrop { 0% { opacity:0; transform:translateY(-170%) rotate(calc(var(--r) - 28deg)) scale(1.5); } 55% { opacity:1; } 100% { opacity:1; transform:translateY(0) rotate(var(--r)) scale(1); } }
+  .memflash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:5; }
+  .memflash.go { animation:memflash .35s ease-out; }
+  @keyframes memflash { 0% { opacity:.9; } 100% { opacity:0; } }
+  #confetti { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:90; }
+  .confetti { position:absolute; top:-8vh; will-change:transform; animation:confFall linear forwards; }
+  @keyframes confFall { to { transform:translateY(115vh) rotate(540deg); } }
+  .wposter { position:fixed; left:50%; top:50%; width:20em; padding:.9em 1em 1em; box-sizing:border-box; text-align:center; z-index:40; color:#3a2410; font-size:var(--u, 15px);
+             background:radial-gradient(ellipse at 50% 40%, #f3dfae 0%, #e7cc94 70%, #cfae6c 100%); transform:translate(-50%, -50%);
+             filter:drop-shadow(0 14px 18px rgba(0,0,0,.55)); animation:posterPop .9s cubic-bezier(.2, 1.3, .35, 1) forwards; }
+  .wposter.wposter-img { width:auto; padding:0; background:none; font-size:inherit; }
+  .wposter.wposter-img img { display:block; width:100%; height:100%; }
+  .wp-nail { position:absolute; top:.45em; width:.7em; height:.7em; border-radius:50%; background:#5a3a1c; box-shadow:inset -1px -1px 0 #2a1808; } .wp-nail.l { left:.9em; } .wp-nail.r { right:.9em; }
+  .wp-head { font:900 2.5em/1 Georgia, "Times New Roman", serif; letter-spacing:.12em; margin:.1em 0 .25em; transform:scaleY(1.1); }
+  .wp-photo { width:100%; margin:0 auto; border:.16em solid #3a2410; background:#222; } .wp-photo .portrait { width:100%; max-width:none; margin:0; border:none; border-radius:0; }
+  .wp-photo img { filter:sepia(.3) contrast(1.05) saturate(.9); }
+  .wp-doa { font:bold 1.05em Georgia, serif; letter-spacing:.14em; margin:.5em 0 .1em; }
+  .wp-name { font:900 1.55em Georgia, serif; letter-spacing:.06em; }
+  .wp-bounty { font:900 1.7em Georgia, serif; margin:.15em 0 .05em; white-space:nowrap; } .wp-b { margin-right:.18em; } .wp-dash { margin-left:.08em; }
+  .wp-foot { font:bold .85em Georgia, serif; letter-spacing:.3em; margin-top:.3em; }
+  @keyframes posterPop { 0% { transform:translate(-50%, 30%) scale(.08) rotate(-24deg); opacity:0; } 55% { opacity:1; } 100% { transform:translate(-50%, -50%) scale(1) rotate(-1.5deg); opacity:1; } }
+  .postnext { position:fixed; left:50%; bottom:14px; transform:translateX(-50%); z-index:45; margin:0; }
+  #pausebtn { display:none; position:fixed; top:8px; right:8px; z-index:60; width:42px; height:42px; margin:0; padding:0; border-radius:50%; font-size:1.2rem; line-height:1;
+              background:rgba(20,16,50,.72); border:2px solid rgba(255,255,255,.7); color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+  #pausebtn:hover { background:rgba(60,40,120,.85); }
+  body[data-mode="play"] #pausebtn { display:block; }
+  #overlay.paused { background:rgba(12,10,36,.62); -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px); }
+  #pausecard { max-width:340px; }
+  #pausecard h2 { margin:0 0 4px; font-size:1.8rem; letter-spacing:.06em; }
+  #pausecard .pausehint { font-size:.8rem; color:#6b4f28; margin:0 0 8px; }
+  #pausecard .pausebtns { display:flex; flex-direction:column; gap:8px; align-items:stretch; margin-top:6px; }
+  #pausecard .pausebtns button { margin:0; }
+  #pausecard #presume { background:#3e9b57; border-color:#256e3a; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div id="bgscene" aria-hidden="true"><div id="petals"></div></div>
+<h1>⚔️ The Birthday Treasure Hunt <small style="font-size:.7em;opacity:.8">· Land of Giants, Elbaf</small></h1>
+<div id="hud">Score: <b id="score">0</b> &nbsp; Ladi Pav: <b id="berries">0</b> / <b id="total">0</b> &nbsp; Lives: <span id="lives" class="lives" role="img" aria-label="3 lives"></span></div>
+<div id="stage"><canvas id="c" width="920" height="520"></canvas></div>
+
+<div id="confetti"></div>
+<button id="pausebtn" aria-label="Pause" title="Pause (Esc or Space)">⏸</button>
+<div id="overlay" class="gated">
+  <div class="card" id="gate"><div class="gatebox"><div class="gateicon">🎁</div><button id="open" autofocus>Tap to begin</button><div class="gatehint">🔊 sound on</div></div></div>
+  <div class="card hidden" id="start">
+    <div class="startwrap"><div class="starttext">
+    <h2>Welcome to Elbaf, Birthday Girl! 💞🥳💞</h2>
+    <p>Run around the giants' village and collect <b>every ladi pav</b> 🍞 before the God's Knights catch you.</p>
+    <p>Steer with <b>arrow keys / WASD</b>, or drag / swipe on the screen. The edge tunnels wrap around.</p>
+    <input type="checkbox" id="sound" checked hidden>   <!-- the master sound switch: the speaker button on the win/lose screens flips it -->
+    <button id="go">Yipee!!</button>
+    </div></div>
+  </div>
+  <div class="card hidden" id="end"></div>
+  <div class="card wide hidden" id="pick"></div>
+  <div class="card hidden" id="pausecard"></div>
+</div>
+
+<script>
+const cv = document.getElementById('c');
+let ctx = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+const T = 40, COLS = 23, ROWS = 13, W = COLS * T, H = ROWS * T, TUNNEL = 6;
+const POSTER_NAME = 'Kamya Shah';       // the name on the WANTED poster that pops out of the cake
+const PLAYER_NAME = 'Birthday Girl';   // shown on the start screen and the WANTED poster
+const START_LIVES = 3;
+const INV_FRAMES = 120;      // 2 seconds of invincibility at 60fps
+const SINK_FRAMES = 110;
+const SINK_PAUSE = 60;       // 1 second of calm sea before the lose message
+const FRIGHT_FRAMES = 1200;  // 20 seconds of Gear 5 / scared Knights
+const KNIGHT_SPEED = 1.7, SCARED_SPEED = 1.9;   // px per step (you move at 2): scared Knights scatter faster than they chase
+const MAP = [
+  '#######################',
+  '#o...................o#',
+  '#.##.##.###.###.##.##.#',
+  '#.....................#',
+  '#.##.#.#.##.##.#.#.##.#',
+  '#....#...#...#...#....#',
+  '.......................',
+  '#....#...#####...#....#',
+  '#.##.#.#.#####.#.#.##.#',
+  '#.....................#',
+  '#.##.##.###.###.##.##.#',
+  '#o...................o#',
+  '#######################',
+];
+const SHIP_START = [11, 9];
+const MARINE_SPAWNS = [[10, 5], [12, 5], [11, 6], [11, 5]];
+const ENEMY_BOX = [[10, 5], [11, 5], [12, 5], [10, 6], [11, 6], [12, 6]];   // no pellets where the Knights start
+const BONUS_EVERY = 420;        // a new bonus treat every 7 seconds of play
+const BONUS_COOLDOWN = 300;     // after a treat is eaten or vanishes, 5 seconds before the next can spawn
+const BONUS_FRAMES = 360;       // ...and each one waits 6 seconds, then vanishes (so there is never a pile-up)
+const FOOD_POINTS = [200, 100, 300, 500];     // Pav Bhaji, Chili Cheese Toast, GC Burrito, Napoleon Cake
+const ENGAGE_FRAMES = 300;      // a Knight held by a Straw Hat stays put for 5 seconds
+const MARINE_DELAYS = [0, 90, 240, 420];
+const DIRS = [[0, -1], [-1, 0], [0, 1], [1, 0]];
+
+let ship, marines, food, berriesLeft, eaten, score, lives, t, mode, won, name, target;
+let inv, shake, sinking, fright, combo, floats, bounceCd;
+let speedBoost = 0, shield = 0, slow = 0, confuse = 0, cameo = null, flashFx = 0;     // active Straw Hat powers
+let bonus, bonusClock = 0, bonusCooldown = 0, lastFood = -1;      // bonus treat on Luffy's start tile
+let usedCrew = new Set();                           // Straw Hats already called this run (greyed out in the picker)
+let moved = false;                                  // the treat timer only runs once Luffy has started moving
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+const center = n => n * T + T / 2;
+const walkable = (c, r) => {
+  if (r < 0 || r >= ROWS) return false;
+  if (c < 0 || c >= COLS) return r === TUNNEL;   // the tunnel runs off both edges
+  return MAP[r][c] !== '#';
+};
+
+// ---------- sound: mild taiko drums while Luffy is powered up (synthesised, no audio files) ----------
+let audioCtx, drumGain, sfxGain, noiseBuf, noiseLong, drumTimer = null, drumNext = 0, drumIdx = 0, drumsOn = false;
+const DON = [0, 3, 4, 6, 8, 11, 12], KA = [2, 10, 14, 15], DRUM_STEP = 60 / 128 / 4;     // 128 bpm, 16 steps a bar
+function ensureAudio() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      drumGain = audioCtx.createGain(); drumGain.gain.value = 0; drumGain.connect(audioCtx.destination);
+      sfxGain = audioCtx.createGain(); sfxGain.gain.value = 0.7; sfxGain.connect(audioCtx.destination);
+      noiseLong = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.6, audioCtx.sampleRate);
+      const nl = noiseLong.getChannelData(0); for (let i = 0; i < nl.length; i++) nl[i] = Math.random() * 2 - 1;
+      noiseBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
+      const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) { audioCtx = null; }
+}
+function drumHit(t0, freq, vol, dur) {
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.frequency.setValueAtTime(freq * 2.4, t0); o.frequency.exponentialRampToValueAtTime(freq, t0 + 0.07);
+  g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  o.connect(g); g.connect(drumGain); o.start(t0); o.stop(t0 + dur + 0.02);
+  const n = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), ng = audioCtx.createGain();   // skin slap
+  n.buffer = noiseBuf; f.type = 'bandpass'; f.frequency.value = 1400;
+  ng.gain.setValueAtTime(vol * 0.35, t0); ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.04);
+  n.connect(f); f.connect(ng); ng.connect(drumGain); n.start(t0);
+}
+function drumTick() {
+  while (drumNext < audioCtx.currentTime + 0.2) {
+    const i = drumIdx % 16;
+    if (DON.includes(i)) drumHit(drumNext, 70, 0.9, 0.35);
+    if (KA.includes(i)) drumHit(drumNext, 190, 0.45, 0.13);
+    drumIdx++; drumNext += DRUM_STEP;
+  }
+}
+function setDrums(on) {
+  if (on === drumsOn) return;
+  drumsOn = on;
+  if (loopOn('drums', on, on)) return;                // drums.mp3 if you added one, otherwise the synth taiko below
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  if (on) { drumIdx = 0; drumNext = now + 0.05; drumGain.gain.setTargetAtTime(0.2, now, 0.1); drumTimer = setInterval(drumTick, 50); }
+  else { drumGain.gain.setTargetAtTime(0, now, 0.25); clearInterval(drumTimer); drumTimer = null; }
+}
+// ---------- sound effects (synthesised) + short voice lines ----------
+const sfxOn = () => audioCtx && sfxGain && $('sound').checked;
+function tone(type, pts, t0, dur, vol) {          // pts = [[secondsAfterStart, Hz], ...] glides between points
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain(), at = audioCtx.currentTime + t0;
+  o.type = type; o.frequency.setValueAtTime(pts[0][1], at + pts[0][0]);
+  for (const [dt, f] of pts.slice(1)) o.frequency.exponentialRampToValueAtTime(f, at + dt);
+  g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g); g.connect(sfxGain); o.start(at); o.stop(at + dur + 0.03);
+}
+function noise(t0, dur, vol, freq, type = 'bandpass') {
+  const n = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain(), at = audioCtx.currentTime + t0;
+  n.buffer = noiseLong; f.type = type; f.frequency.value = freq; f.Q.value = 1.5;
+  g.gain.setValueAtTime(vol, at); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  n.connect(f); f.connect(g); g.connect(sfxGain); n.start(at); n.stop(at + dur + 0.02);
+}
+function say(ja, en, pitch = 1.7, rate = 1.15) {   // Luffy-ish shout via the browser's own voices, if it has any
+  try {
+    const ss = window.speechSynthesis; if (!ss) return;
+    ss.cancel();
+    const jaVoice = ss.getVoices().find(v => v.lang && v.lang.toLowerCase().startsWith('ja'));
+    const u = new SpeechSynthesisUtterance(jaVoice ? ja : en);
+    if (jaVoice) u.voice = jaVoice;
+    u.pitch = pitch; u.rate = rate; u.volume = 0.85;
+    ss.speak(u);
+  } catch (e) {}
+}
+const CREW = ['Zoro', 'Nami', 'Usopp', 'Sanji', 'Robin', 'Franky', 'Brook', 'Jinbe'];
+
+// ---------- sound slots ----------
+// Every sound can be swapped for your own mp3: drop a file with the matching name into the sounds/ folder and reload.
+// No file for a slot? The built-in synthesised sound (where there is one) plays instead.
+const SOUND_DIR = 'sounds/';
+const SOUNDS = {
+  music:    { files: ['music.mp3'],             vol: 0.35, loop: true },   // background music, ducks under the drums
+  drums:    { files: ['drums.mp3'],             vol: 0.5,  loop: true },   // plays while Luffy is in Gear 5
+  chomp:    { files: ['chomp.mp3'],             vol: 0.6 },                // each ladi pav
+  fruit:    { files: ['fruit.mp3'],             vol: 0.9 },                // eating the Gomu Gomu no Mi
+  hurt:     { files: ['hurt.mp3', 'oof.mp3'],   vol: 0.9 },                // Luffy gets hit (the "oof")
+  results:  { files: ['results.mp3'],           vol: 0.45, loop: true },   // song on the win / lose screens (one file for both)
+  win:      { files: ['win.mp3'],               vol: 0.9 },                // clearing the board
+  lose:     { files: ['lose.mp3'],              vol: 0.9 },                // out of lives (no built-in sound)
+  bonus:    { files: ['bonus.mp3'],             vol: 0.8 },                // a bonus food appears / is eaten
+  engage:   { files: ['engage.mp3'],            vol: 0.8 },                // any Straw Hat's power (power-zoro.mp3 etc. override it per character)
+  cut:      { files: ['cut.mp3'],               vol: 0.8 },                // knife slicing the cake
+  poster:   { files: ['poster.mp3'],            vol: 0.9 },                // the WANTED poster popping out
+  cake:     { files: ['cake.mp3'],              vol: 0.7 },                // song when the birthday cake appears (built-in: a music-box Happy Birthday)
+  blow:     { files: ['blow.mp3'],              vol: 0.6 },                // puff of breath blowing out candles
+  wish:     { files: ['wish.mp3'],              vol: 0.8 },                // all 25 candles out
+  shutter:  { files: ['shutter.mp3'],           vol: 0.7 },                // camera click as each photo lands on the win-screen scrapbook
+  bounce:   { files: ['bounce.mp3'],            vol: 0.8 },                // Gear 5 Luffy bounces off a Knight
+  knockout: { files: ['knockout.mp3'],          vol: 0.8 },                // knocking out a scared knight (no built-in sound)
+};
+const clips = {};                                  // name -> loaded <audio>, only for slots that have a file
+function loadClip(name, i = 0) {
+  const def = SOUNDS[name]; if (i >= def.files.length) return;
+  try {
+    const a = new Audio(); a.preload = 'auto'; a.loop = !!def.loop;
+    a.addEventListener('canplaythrough', () => { if (!clips[name]) clips[name] = a; }, { once: true });
+    a.addEventListener('error', () => loadClip(name, i + 1), { once: true });             // missing file: try the next name, else built-in
+    a.src = SOUND_DIR + def.files[i] + '?t=' + Date.now();                                  // cache-bust so a swapped file is picked up on reload
+  } catch (e) {}
+}
+CREW.forEach(n => { SOUNDS['power-' + n.toLowerCase()] = { files: ['power-' + n.toLowerCase() + '.mp3'], vol: 0.8 }; });   // one optional sound per Straw Hat
+Object.keys(SOUNDS).forEach(n => loadClip(n));
+const soundOn = () => $('sound').checked;
+const shots = new Set();                           // every one-shot mp3 currently playing, so mute / restart can stop them
+function playClip(name) {                          // one-shot; true if an mp3 handled it
+  const c = clips[name]; if (!c || !soundOn()) return false;
+  try {
+    const a = c.cloneNode(); a.volume = SOUNDS[name].vol; shots.add(a);
+    a.addEventListener('ended', () => shots.delete(a), { once: true });
+    const p = a.play(); if (p && p.catch) p.catch(() => shots.delete(a));
+  } catch (e) { return false; }
+  return true;
+}
+function stopShots() { shots.forEach(a => { try { a.pause(); } catch (e) {} }); shots.clear(); }        // hard stop (new round)
+function pauseShots() { shots.forEach(a => { try { if (!a.paused) { a.pause(); a.dataset.mutePaused = '1'; } } catch (e) {} }); }
+function resumeShots() {                           // unmuting: long win / lose clips carry on from where they stopped
+  shots.forEach(a => {
+    if (a.dataset.mutePaused !== '1') return;
+    delete a.dataset.mutePaused;
+    if (mode === 'over' && a.duration - a.currentTime > 0.5) { try { const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+    else shots.delete(a);                          // short effects from earlier aren't replayed late
+  });
+}
+function loopOn(name, on, restart) {              // looping slots (music, drums)
+  const c = clips[name]; if (!c) return false;
+  try {
+    if (on && soundOn()) { if (restart) c.currentTime = 0; c.volume = SOUNDS[name].vol; const p = c.play(); if (p && p.catch) p.catch(() => {}); }
+    else c.pause();
+  } catch (e) {}
+  return true;
+}
+
+function sfxFruit() {                              // "Gomu gomu!" → chomp chomp → gulp → rubbery Gear 5 boing → sparkle
+  if (!soundOn() || playClip('fruit') || !sfxOn()) return;
+  say('ゴムゴム！', 'Gum gum!');
+  for (let k = 0; k < 4; k++) { noise(0.2 + k * 0.11, 0.07, 0.55, 700 + k * 90); tone('sine', [[0, 190], [0.08, 90]], 0.2 + k * 0.11, 0.09, 0.4); }
+  tone('sine', [[0, 460], [0.14, 150]], 0.68, 0.16, 0.5);                                             // gulp
+  tone('triangle', [[0, 220], [0.12, 900], [0.45, 320]], 0.86, 0.5, 0.32);                           // boing
+  [1319, 1568, 2093].forEach((f, i) => tone('sine', [[0, f]], 1.0 + i * 0.1, 0.35, 0.12));
+}
+function synthOof() {                             // sawtooth "voice" through two vowel formants, then a breathy "f"
+  const at = audioCtx.currentTime + 0.01, o = audioCtx.createOscillator(), env = audioCtx.createGain();
+  o.type = 'sawtooth'; o.frequency.setValueAtTime(250, at); o.frequency.exponentialRampToValueAtTime(135, at + 0.26);
+  env.gain.setValueAtTime(0.0001, at); env.gain.exponentialRampToValueAtTime(0.75, at + 0.025);
+  env.gain.setValueAtTime(0.75, at + 0.15); env.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+  for (const [f0, f1, q, vol] of [[520, 340, 6, 1], [950, 680, 8, 0.6], [2400, 1900, 10, 0.18]]) {
+    const bp = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    bp.type = 'bandpass'; bp.Q.value = q; bp.frequency.setValueAtTime(f0, at); bp.frequency.linearRampToValueAtTime(f1, at + 0.28);
+    g.gain.value = vol; o.connect(bp); bp.connect(g); g.connect(env);
+  }
+  env.connect(sfxGain); o.start(at); o.stop(at + 0.34);
+  noise(0.2, 0.08, 0.28, 5200, 'highpass');                                                           // the "f"
+}
+function sfxChomp() {                              // a quick nom for each ladi pav
+  if (!soundOn() || playClip('chomp') || !sfxOn()) return;
+  const k = eaten % 2;                                                   // alternate two pitches so a run of pellets goes nom-nom-nom
+  noise(0, 0.05, 0.35, 900 + k * 250); tone('sine', [[0, 260 + k * 40], [0.07, 120]], 0, 0.08, 0.3);
+}
+function sfxHurt() {
+  if (!soundOn() || playClip('hurt') || !sfxOn()) return;
+  synthOof();
+}
+function sfxWin() {                               // fanfare
+  if (!soundOn() || playClip('win') || !sfxOn()) return;
+  tone('sine', [[0, 110], [0.2, 55]], 0, 0.3, 0.9); noise(0, 0.5, 0.25, 6000, 'highpass');
+  [[523, 0.0], [659, 0.15], [784, 0.3], [1047, 0.45]].forEach(([f, d]) => tone('sawtooth', [[0, f]], d, 0.22, 0.14));
+  [1047, 1319, 1568].forEach(f => tone('sawtooth', [[0, f]], 0.62, 1.1, 0.11));
+  noise(0.62, 0.9, 0.3, 7000, 'highpass');
+}
+function sfxBounce() {                             // rubbery boing
+  if (!soundOn() || playClip('bounce') || !sfxOn()) return;
+  tone('triangle', [[0, 260], [0.07, 880], [0.28, 340]], 0, 0.32, 0.35);
+}
+function sfxBonus() {                              // little rising "bing-bing"
+  if (!soundOn() || playClip('bonus') || !sfxOn()) return;
+  [660, 880, 1320].forEach((f, i) => tone('triangle', [[0, f]], i * 0.09, 0.16, 0.25));
+}
+function sfxPower(who) {                           // power-<name>.mp3, else engage.mp3, else a synthesised stand-in
+  if (!soundOn() || playClip('power-' + CREW[who].toLowerCase()) || playClip('engage') || !sfxOn()) return;
+  if (who === 1) { noise(0, 0.35, 0.7, 3000, 'highpass'); tone('sawtooth', [[0, 1800], [0.3, 120]], 0, 0.4, 0.25); noise(0.1, 0.2, 0.5, 800); }       // thunder crack
+  else if (who === 5) { noise(0, 0.5, 0.35, 1200); tone('sawtooth', [[0, 200], [0.4, 900]], 0, 0.5, 0.2); }                                         // whoosh up
+  else if (who === 0 || who === 3) { noise(0, 0.18, 0.5, 5200, 'highpass'); tone('sawtooth', [[0, 1400], [0.2, 380]], 0, 0.28, 0.22); tone('square', [[0, 220], [0.12, 110]], 0.02, 0.15, 0.2); }   // clash / kick
+  else [880, 1175, 1568, 2093].forEach((f, i) => tone('triangle', [[0, f]], i * 0.07, 0.3, 0.16));                                                 // magic chime
+}
+function sfxShutter() {                            // camera click
+  if (!soundOn() || playClip('shutter') || !sfxOn()) return;
+  noise(0, 0.05, 0.6, 3200, 'highpass'); tone('square', [[0, 2200], [0.03, 900]], 0, 0.06, 0.15); noise(0.07, 0.06, 0.5, 2400, 'highpass');
+}
+// Confetti that falls the whole height of the window (a fixed full-screen layer, so no card clips it).
+function confettiBurst(n = 30, bits = ['🎉', '💞', '✨', '🎊', '💖', '🌸']) {
+  const layer = $('confetti'); if (!layer) return;
+  for (let k = 0; k < n; k++) {
+    const c = document.createElement('span'); c.className = 'confetti'; c.textContent = bits[k % bits.length];
+    c.style.left = (Math.random() * 96) + 'vw'; c.style.fontSize = (1 + Math.random() * 1.1) + 'rem';
+    c.style.animationDuration = (3.2 + Math.random() * 2.6) + 's'; c.style.animationDelay = (Math.random() * 1.1) + 's';
+    c.addEventListener('animationend', () => c.remove()); layer.appendChild(c);
+  }
+}
+function sfxCut() {                                // swish + soft thud
+  if (!soundOn() || playClip('cut') || !sfxOn()) return;
+  noise(0, 0.22, 0.55, 5000, 'highpass'); tone('sine', [[0, 220], [0.18, 70]], 0.12, 0.25, 0.5);
+}
+function sfxPoster() {                              // whoosh + a short brass-y fanfare
+  if (!soundOn() || playClip('poster') || !sfxOn()) return;
+  noise(0, 0.5, 0.4, 1500); tone('sawtooth', [[0, 180], [0.4, 700]], 0, 0.5, 0.15);
+  [[523, 0.35], [659, 0.5], [784, 0.65], [1047, 0.8]].forEach(([f, d]) => tone('sawtooth', [[0, f]], d, 0.35, 0.12));
+}
+function sfxBlow() {                               // a soft puff
+  if (!soundOn() || playClip('blow') || !sfxOn()) return;
+  noise(0, 0.28, 0.35, 900); noise(0.02, 0.2, 0.2, 2200);
+}
+function sfxWish() {                               // sparkly rising chime when the last candle goes out
+  if (!soundOn() || playClip('wish') || !sfxOn()) return;
+  [784, 988, 1175, 1568, 1976, 2349].forEach((f, i) => tone('triangle', [[0, f]], i * 0.09, 0.5, 0.2)); noise(0.4, 0.8, 0.12, 7000, 'highpass');
+}
+const BDAY_TUNE = [[392, 0.75], [392, 0.25], [440, 1], [392, 1], [523, 1], [494, 2], [392, 0.75], [392, 0.25], [440, 1], [392, 1], [587, 1], [523, 2],
+                   [392, 0.75], [392, 0.25], [784, 1], [659, 1], [523, 1], [494, 1], [440, 1], [698, 0.75], [698, 0.25], [659, 1], [523, 1], [587, 1], [523, 2]];
+function sfxBirthdaySong() {                       // music-box "Happy Birthday" (skipped if you supplied results.mp3, so they don't clash)
+  if (!soundOn() || playClip('cake') || clips.results || !sfxOn()) return;
+  let at = 0.2; for (const [f, beats] of BDAY_TUNE) { const d = beats * 0.42; tone('sine', [[0, f]], at, d * 1.6, 0.16); tone('sine', [[0, f * 2]], at, d * 1.1, 0.05); at += d; }
+}
+const sfxLose = () => playClip('lose');
+const sfxKnockout = () => playClip('knockout');
+
+// Results song: starts a moment after the win / lose screen appears (so the fanfare isn't talked over) and loops until you restart.
+let resultsTimer = null, resultsOn = false;
+function resultsSong(on, delayMs = 0) {
+  clearTimeout(resultsTimer); resultsOn = on;
+  if (!on) { loopOn('results', false); return; }
+  resultsTimer = setTimeout(() => { if (resultsOn && mode === 'over') loopOn('results', true, true); }, delayMs);
+}
+// Mute button shown on the win / lose screens. It flips the same Sound switch as the start screen, so it stays muted next round too.
+const muteBtnHtml = () => `<button id="mutebtn" class="mutebtn" aria-label="Mute or unmute sound" title="Mute / unmute">${soundOn() ? '🔊' : '🔇'}</button>`;
+function bindMute() {
+  const b = $('mutebtn'); if (!b) return;
+  b.onclick = () => { $('sound').checked = !$('sound').checked; $('sound').onchange(); b.textContent = soundOn() ? '🔊' : '🔇'; };
+}
+
+// Background music: loops during play, and pauses while Luffy is in Gear 5 (the drums take over), then picks up where it left off.
+const musicOn = on => loopOn('music', on, on);
+let musicTry = 0;
+function syncMusic() {
+  const c = clips.music; if (!c) return;
+  const want = mode === 'play' && soundOn() && !drumsOn;
+  if (want && c.paused) {
+    if (performance.now() - musicTry < 400) return;            // don't hammer play() if the browser refuses
+    musicTry = performance.now(); c.volume = 0;                // resume from the same spot, fading back in
+    try { const p = c.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  } else if (!want && !c.paused) c.pause();
+  if (!c.paused) c.volume = Math.min(SOUNDS.music.vol, c.volume + 0.012);
+}
+
+const updateDrums = () => setDrums(mode === 'play' && !sinking && fright > 0 && $('sound').checked);
+
+// ---------- Wano night scene behind the game ----------
+function buildWanoScene() {
+  const W_ = 1600, H_ = 900, bez = (p, t) => { const u = 1 - t; return [u*u*u*p[0][0] + 3*u*u*t*p[1][0] + 3*u*t*t*p[2][0] + t*t*t*p[3][0], u*u*u*p[0][1] + 3*u*u*t*p[1][1] + 3*u*t*t*p[2][1] + t*t*t*p[3][1]]; };
+  let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const stars = Array.from({ length: 70 }, () => `<circle class="star" cx="${(rnd() * W_).toFixed(0)}" cy="${(rnd() * 470).toFixed(0)}" r="${(0.6 + rnd() * 1.5).toFixed(1)}" fill="#fff" style="animation-delay:${(-rnd() * 3).toFixed(2)}s"/>`).join('');
+  const blossom = (x, y, k = 1) => `<g transform="translate(${x.toFixed(0)} ${y.toFixed(0)}) scale(${k})"><g fill="#ffc6de">${[0, 72, 144, 216, 288].map(a => `<circle cx="${(Math.cos(a * Math.PI / 180) * 6).toFixed(1)}" cy="${(Math.sin(a * Math.PI / 180) * 6).toFixed(1)}" r="5"/>`).join('')}</g><circle r="2.6" fill="#ff7fb0"/></g>`;
+  const branch = (segs, mirror) => {                      // a sakura branch with blossoms strung along it
+    let path = '', blooms = '';
+    segs.forEach((p, i) => {
+      const pts = p.map(([x, y]) => [mirror ? W_ - x : x, y]);
+      path += `<path d="M${pts[0]} C${pts[1]} ${pts[2]} ${pts[3]}" fill="none" stroke="#2c1a24" stroke-width="${Math.max(3, 15 - i * 4)}" stroke-linecap="round"/>`;
+      for (let t = 0.1; t <= 1; t += 0.11) { const [bx, by] = bez(pts, t); blooms += blossom(bx + (rnd() - .5) * 26, by + (rnd() - .3) * 30, 0.85 + rnd() * 0.7); }
+    });
+    return path + blooms;
+  };
+  const leftBranch = branch([[[-30, 40], [140, 30], [250, 90], [360, 70]], [[200, 62], [260, 130], [330, 170], [420, 190]], [[330, 78], [420, 40], [500, 60], [560, 110]]], false);
+  const rightBranch = branch([[[-30, 40], [140, 30], [250, 90], [360, 70]], [[200, 62], [260, 130], [330, 170], [420, 190]], [[330, 78], [420, 40], [500, 60], [560, 110]]], true);
+  const lantern = (x, drop, d) => `<g class="lantern" style="animation-delay:${d}s"><line x1="${x}" y1="0" x2="${x}" y2="${drop}" stroke="#3a2418" stroke-width="2.4"/>
+      <circle cx="${x}" cy="${drop + 38}" r="62" fill="url(#lglow)"/><rect x="${x - 15}" y="${drop - 2}" width="30" height="9" rx="3" fill="#2b1a10"/>
+      <ellipse cx="${x}" cy="${drop + 38}" rx="26" ry="32" fill="url(#lbody)" stroke="#7a1414" stroke-width="2"/>
+      <path d="M${x - 24} ${drop + 24} q24 8 48 0 M${x - 26} ${drop + 38} q26 8 52 0 M${x - 24} ${drop + 52} q24 8 48 0" stroke="#7a1414" stroke-width="1.4" fill="none" opacity=".8"/>
+      <rect x="${x - 14}" y="${drop + 67}" width="28" height="8" rx="3" fill="#2b1a10"/><line x1="${x}" y1="${drop + 75}" x2="${x}" y2="${drop + 94}" stroke="#d8a93a" stroke-width="3"/></g>`;
+  const kumoSym = `<symbol id="kumo" viewBox="-30 -20 130 70"><path d="M0 40 Q-18 40 -18 28 Q-18 14 -2 14 Q0 -2 18 0 Q34 -14 50 2 Q66 -6 76 10 Q94 12 92 28 Q92 40 76 40Z" fill="#ffe9f6" opacity=".92"/>
+      <g fill="none" stroke="#e6a9cf" stroke-width="2.4" stroke-linecap="round"><path d="M18 20 c8 -7 20 2 13 11 c-6 7 -16 2 -13 -5"/><path d="M52 14 c8 -7 20 2 13 11 c-6 7 -16 2 -13 -5"/><path d="M-4 30 c-6 -6 -2 -14 6 -12"/></g></symbol>`;
+  const clouds = [[120, 210, 1.5, 150, 0], [620, 140, 1.15, 190, -70], [980, 300, 1.7, 170, -120], [330, 360, 1.0, 230, -30]]
+    .map(([x, y, k, dur, dl]) => `<g class="kumo" style="animation-duration:${dur}s;animation-delay:${dl}s"><use href="#kumo" x="${x}" y="${y}" width="${130 * k}" height="${70 * k}"/></g>`).join('');
+  // seigaiha waves along the bottom
+  let waves = ''; const R = 46;
+  for (let row = 0; row < 5; row++) for (let col = -1; col < W_ / (R * 2) + 2; col++) {
+    const cx = col * R * 2 + (row % 2 ? R : 0), cy = 800 + row * R * 0.55;
+    waves += `<g transform="translate(${cx} ${cy})"><circle r="${R}" fill="#1b3a7a" stroke="#9cc3f5" stroke-width="1.2"/><circle r="${R * 0.72}" fill="#2a5cab" stroke="#9cc3f5" stroke-width="1.2"/><circle r="${R * 0.44}" fill="#1b3a7a" stroke="#9cc3f5" stroke-width="1.2"/></g>`;
+  }
+  const svg = `<svg viewBox="0 0 ${W_} ${H_}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#120c34"/><stop offset=".38" stop-color="#34195e"/><stop offset=".68" stop-color="#8a3a74"/><stop offset=".88" stop-color="#e5805e"/><stop offset="1" stop-color="#ffb46a"/></linearGradient>
+      <radialGradient id="moonglow"><stop offset="0" stop-color="#fff3c8" stop-opacity=".95"/><stop offset=".45" stop-color="#ffe2a6" stop-opacity=".28"/><stop offset="1" stop-color="#ffe2a6" stop-opacity="0"/></radialGradient>
+      <radialGradient id="lglow"><stop offset="0" stop-color="#ff6a3a" stop-opacity=".6"/><stop offset="1" stop-color="#ff6a3a" stop-opacity="0"/></radialGradient>
+      <linearGradient id="lbody" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a81818"/><stop offset=".5" stop-color="#ff5a3a"/><stop offset="1" stop-color="#a81818"/></linearGradient>
+      ${kumoSym}
+    </defs>
+    <rect width="${W_}" height="${H_}" fill="url(#sky)"/>
+    ${stars}
+    <circle cx="1170" cy="250" r="330" fill="url(#moonglow)"/>
+    <circle cx="1170" cy="250" r="118" fill="#fff6d6"/><g fill="#f0dca8" opacity=".6"><circle cx="1130" cy="225" r="20"/><circle cx="1205" cy="285" r="26"/><circle cx="1150" cy="305" r="13"/><circle cx="1215" cy="205" r="11"/></g>
+    ${clouds}
+    <path d="M0 780 L0 640 Q90 600 190 650 Q290 590 400 660 Q520 610 620 670 Q760 610 900 680 Q1040 620 1180 690 Q1320 630 1460 690 Q1550 650 1600 680 L1600 780Z" fill="#2c1a58"/>
+    <g transform="translate(-150 0)"><path d="M70 790 L330 450 Q372 400 414 450 L690 790Z" fill="#4a2c82"/><path d="M296 492 L330 450 Q372 400 414 450 L446 492 Q420 470 395 488 Q372 466 350 488 Q320 470 296 492Z" fill="#f4eaff"/></g>
+    <g transform="translate(125 0)"><g fill="#140a2c"><path d="M1190 790 L1215 705 Q1240 690 1262 700 Q1290 650 1330 640 Q1400 625 1440 665 Q1462 690 1448 722 L1460 790Z"/>
+      <path d="M1262 700 Q1250 640 1300 612 Q1370 580 1420 618 Q1462 650 1440 700 Q1420 720 1400 716 L1398 740 L1290 740 L1290 716 Q1272 718 1262 700Z"/></g>
+    <g fill="#ff7a3a"><ellipse cx="1325" cy="668" rx="17" ry="21"/><ellipse cx="1388" cy="664" rx="17" ry="21"/></g><path d="M1352 686 l-8 22 h18z" fill="#ff7a3a" opacity=".75"/>
+    <g fill="#140a2c"><rect x="1308" y="716" width="9" height="22"/><rect x="1326" y="716" width="9" height="22"/><rect x="1344" y="716" width="9" height="22"/><rect x="1362" y="716" width="9" height="22"/><rect x="1380" y="716" width="9" height="22"/></g></g>
+    <g transform="translate(-100 0)"><g fill="#160c30"><path d="M168 790 V690 h8 V665 h-26 q18 -4 34 -22 h60 q16 18 34 22 h-26 v25 h8 v100Z"/><path d="M130 700 q30 -4 56 -30 h50 q26 26 56 30 q-26 6 -56 4 h-50 q-30 2 -56 -4Z"/><path d="M146 655 q22 -4 40 -22 h30 q18 18 40 22 q-18 4 -40 3 h-30 q-22 1 -40 -3Z"/><path d="M174 618 q16 -2 30 -16 h14 q14 14 30 16 q-16 4 -30 2 h-14 q-14 2 -30 -2Z"/><line x1="212" y1="602" x2="212" y2="574" stroke="#160c30" stroke-width="5"/></g>
+    <g fill="#f6e9ff" opacity=".78"><rect x="190" y="722" width="10" height="14"/><rect x="224" y="722" width="10" height="14" opacity=".7"/></g></g>
+    ${waves}
+    ${leftBranch}${rightBranch}
+    <path d="M300 0 Q700 38 1300 0" fill="none" stroke="#2b1a10" stroke-width="3" opacity=".0"/>
+    ${lantern(120, 70, -1.2)}${lantern(210, 118, -2.4)}${lantern(1490, 74, -0.6)}${lantern(1400, 122, -3)}
+  </svg>`;
+  $('bgscene').insertAdjacentHTML('afterbegin', svg);
+  $('petals').innerHTML = Array.from({ length: 18 }, (_, i) => `<span class="petal" style="left:${(rnd() * 100).toFixed(1)}%;--s:${(8 + rnd() * 9).toFixed(0)}px;--dx:${(20 + rnd() * 90).toFixed(0)}px;animation-duration:${(10 + rnd() * 9).toFixed(1)}s;animation-delay:${(-rnd() * 18).toFixed(1)}s"></span>`).join('');
+}
+
+// ---------- fit the board to whatever space the window leaves ----------
+let RSX = 1, RSY = 1, lastDpr = 0;               // backing pixels per logical pixel (1 on a normal screen, 2 on Retina...)
+function fit() {
+  const st = $('stage'), border = 12;
+  const SCENE_MARGIN = 0.9;                              // board uses ~90% of the free space so the Wano scenery shows around it
+  const k = Math.min((st.clientWidth - 16 - border) / W, (st.clientHeight - 8 - border) / H) * SCENE_MARGIN;
+  const cssW = Math.max(120, Math.floor(W * k)), cssH = Math.max(70, Math.floor(H * k));
+  cv.style.width = (cssW + border) + 'px';
+  cv.style.height = (cssH + border) + 'px';
+  // Render at the screen's true resolution so nothing is stretched (and blurry) on high-DPI displays.
+  lastDpr = window.devicePixelRatio || 1;
+  const dpr = Math.min(3, lastDpr), pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
+  if (cv.width !== pw || cv.height !== ph) {
+    cv.width = pw; cv.height = ph;
+    wallLayer = groundLayer = null;                  // the pre-drawn background layers are rebuilt at the new resolution
+  }
+  RSX = cv.width / W; RSY = cv.height / H;
+}
+addEventListener('resize', fit);
+
+// ---------- input ----------
+function setWant(dx, dy) {
+  ship.want = { dx, dy };
+  if ((dx || dy) && dx === -ship.dx && dy === -ship.dy) { ship.dx = dx; ship.dy = dy; } // instant U-turn
+}
+const KEYDIRS = { arrowup:[0,-1], w:[0,-1], arrowleft:[-1,0], a:[-1,0], arrowdown:[0,1], s:[0,1], arrowright:[1,0], d:[1,0] };
+// ---------- pause menu: ⏸ button, Escape or Space; also pauses by itself if the tab is hidden ----------
+let restartArmed = 0;
+function pauseGame() {
+  if (mode !== 'play') return;
+  mode = 'paused'; target = null; clearTimeout(restartArmed); restartArmed = 0;
+  try { if (audioCtx) audioCtx.suspend(); } catch (e) {}                    // freezes every synthesised sound
+  ['music', 'drums'].forEach(n => { const c = clips[n]; if (c && !c.paused) c.pause(); });
+  pauseShots(); try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {}
+  ['gate', 'start', 'end', 'pick'].forEach(id => $(id).classList.add('hidden'));
+  const card = $('pausecard');
+  card.innerHTML = `<h2>⏸ Paused</h2><p class="pausehint">Esc or Space to resume</p>
+    <div class="pausebtns"><button id="presume">▶ Resume</button><button id="psound"></button><button id="prestart">🔄 Restart</button></div>`;
+  const sync = () => { $('psound').textContent = soundOn() ? '🔊 Sound: on' : '🔇 Sound: off'; };
+  sync();
+  $('presume').onclick = resumeGame;
+  $('psound').onclick = () => { $('sound').checked = !$('sound').checked; $('sound').onchange(); sync(); };
+  $('prestart').onclick = () => {                                            // asks twice, so a stray tap can't wipe the run
+    const b = $('prestart');
+    if (!restartArmed) { b.textContent = 'Sure? Tap again'; restartArmed = setTimeout(() => { restartArmed = 0; if (b.isConnected) b.textContent = '🔄 Restart'; }, 3000); return; }
+    clearTimeout(restartArmed); restartArmed = 0;
+    mode = 'play'; try { if (audioCtx) audioCtx.resume(); } catch (e) {}
+    $('pausecard').classList.add('hidden'); $('overlay').classList.remove('paused');
+    start();
+  };
+  card.classList.remove('hidden'); $('overlay').classList.add('paused'); $('overlay').classList.remove('hidden');
+  $('presume').focus();
+}
+function resumeGame() {
+  if (mode !== 'paused') return;
+  $('pausecard').classList.add('hidden'); $('overlay').classList.add('hidden'); $('overlay').classList.remove('paused');
+  clearTimeout(restartArmed); restartArmed = 0;
+  mode = 'play';
+  try { if (audioCtx) audioCtx.resume(); } catch (e) {}
+  if (drumsOn) loopOn('drums', true);                                        // the music resumes by itself on the next step
+  resumeShots();
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+$('pausebtn').onclick = e => { e.currentTarget.blur(); pauseGame(); };
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
+
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' || (e.key === ' ' && !/^(BUTTON|INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) {
+    if (mode === 'play' || mode === 'paused') { e.preventDefault(); if (!e.repeat) (mode === 'play' ? pauseGame : resumeGame)(); return; }
+  }
+  if (mode === 'paused') return;                                             // no steering while paused
+  if (mode === 'pick') { const n = parseInt(e.key, 10); if (n >= 1 && n <= CREW.length) choosePower(n - 1); if (e.key.startsWith('Arrow') || e.key === ' ') e.preventDefault(); return; }
+  if (cardNav && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { stepQuote(e.key === 'ArrowLeft' ? -1 : 1); e.preventDefault(); return; }
+  if (e.target.tagName === 'INPUT' || !ship) return;
+  const d = KEYDIRS[e.key.toLowerCase()];
+  if (d) { setWant(d[0], d[1]); if (e.key.startsWith('Arrow')) e.preventDefault(); }
+});
+function pointerPos(e) {
+  const r = cv.getBoundingClientRect(), b = 6;                          // 6px border on each side
+  return { x:(e.clientX - r.left - b) * W / (r.width - 2 * b), y:(e.clientY - r.top - b) * H / (r.height - 2 * b) };
+}
+cv.addEventListener('pointerdown', e => { target = pointerPos(e); cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => { if (e.buttons) target = pointerPos(e); });
+cv.addEventListener('pointerup', () => target = null);
+
+// ---------- state ----------
+function newMarine(i) {
+  const [c, r] = MARINE_SPAWNS[i];
+  return { i, x:center(c), y:center(r), dx:0, dy:0, acc:0, delay:MARINE_DELAYS[i], scared:false, hold:0, holdWho:0, holdLeft:false, stun:0 };
+}
+function placeActors() {
+  ship = { x:center(SHIP_START[0]), y:center(SHIP_START[1]), dx:0, dy:0, want:null, left:false };
+  marines = MARINE_SPAWNS.map((_, i) => newMarine(i));
+  fright = 0; combo = 0; bonus = null;                // dying clears any bonus food, like Pac-Man's fruit
+  speedBoost = shield = slow = confuse = flashFx = 0; cameo = null;     // ...and any Straw Hat power
+  moved = false; bonusClock = 0; bonusCooldown = 0;                    // back at the start: no treats until he moves again
+}
+function reset() {
+  food = MAP.map(row => [...row].map(ch => ch === '.' ? 1 : ch === 'o' ? 2 : 0));
+  for (const [c, r] of [SHIP_START, ...MARINE_SPAWNS, ...ENEMY_BOX]) food[r][c] = 0;
+  berriesLeft = food.flat().filter(v => v === 1).length;   // only the ladi pav is required to win; the Gomu Gomu no Mi is optional
+  bonus = null; bonusClock = 0; bonusCooldown = 0; usedCrew = new Set();   // the treat timer and the used-Straw-Hat list start fresh each round
+  eaten = 0; score = 0; lives = START_LIVES; t = 0; inv = 0; shake = 0; sinking = 0; won = false; bounceCd = 0;
+  floats = []; target = null;
+  placeActors();
+  $('total').textContent = berriesLeft;
+  updateHud();
+}
+// One Straw Hat icon per life left.
+const HAT_SVG = '<svg class="hat" viewBox="0 0 26 18" width="26" height="18" aria-hidden="true"><ellipse cx="13" cy="12.5" rx="12" ry="4.2" fill="#f0c44c" stroke="#8a5a14" stroke-width="1.2"/><path d="M5 11.5C5 2.5 21 2.5 21 11.5Z" fill="#f5d36a" stroke="#8a5a14" stroke-width="1.2" stroke-linejoin="round"/><path d="M5.2 9.2C8 10.6 18 10.6 20.8 9.2L21 11.3C18 12.8 8 12.8 5 11.3Z" fill="#c0392b"/></svg>';
+function updateHud() {
+  $('score').textContent = score; $('berries').textContent = eaten;
+  const n = Math.max(0, lives), el = $('lives');
+  el.innerHTML = HAT_SVG.repeat(n); el.setAttribute('aria-label', n + (n === 1 ? ' life' : ' lives')); el.title = el.getAttribute('aria-label');
+}
+
+// ---------- movement ----------
+function stepEntity(e, choose) {      // advance one pixel; decide direction only at tile centres
+  if (e.x % T === T / 2 && e.y % T === T / 2) choose(e, (e.x - T / 2) / T, (e.y - T / 2) / T);
+  e.x += e.dx; e.y += e.dy;
+  if (e.x < -T / 2) e.x = W + T / 2; else if (e.x > W + T / 2) e.x = -T / 2;   // tunnel wrap
+}
+// Movement is strictly on the grid: the ship only ever travels along a lane and turns at a junction's exact centre.
+// A turn pressed just before a junction waits for it (<=100ms). If it was pressed up to 100ms (12px) after
+// passing the junction, the ship backs up along its lane to the centre and turns there.
+const TURN_SLACK = 12;
+function tryEarlyTurn(e) {
+  const w = e.want;
+  if (!w || (!e.dx && !e.dy) || (w.dx && e.dx) || (w.dy && e.dy)) return;      // perpendicular turns while moving
+  const c = Math.round((e.x - T / 2) / T), r = Math.round((e.y - T / 2) / T);
+  const off = e.dx ? e.x - center(c) : e.y - center(r);
+  const heading = e.dx || e.dy;
+  if (off * heading > 0 && off <= TURN_SLACK && walkable(c + w.dx, r + w.dy)) { e.dx = -e.dx; e.dy = -e.dy; }
+}
+function shipChoose(e, c, r) {
+  if (e.want && walkable(c + e.want.dx, r + e.want.dy)) { e.dx = e.want.dx; e.dy = e.want.dy; }
+  if (!walkable(c + e.dx, r + e.dy)) e.dx = e.dy = 0;
+}
+function marineChoose(m, c, r) {
+  const opts = DIRS.filter(([dx, dy]) => walkable(c + dx, r + dy) && !(dx === -m.dx && dy === -m.dy));
+  if (!opts.length) { m.dx = -m.dx; m.dy = -m.dy; return; }
+  const sc = Math.floor(ship.x / T), sr = Math.floor(ship.y / T);
+  let tx = sc, ty = sr;
+  if (m.i === 1) { tx += ship.dx * 3; ty += ship.dy * 3; }                              // ambush ahead
+  if (m.i === 2 && Math.abs(c - sc) + Math.abs(r - sr) < 6) { tx = 1; ty = ROWS - 2; }  // shy when close
+  const randomness = (m.scared || confuse > 0) ? 1 : m.i === 3 ? 0.4 : 0.1;
+  let pick;
+  if (Math.random() < randomness) pick = opts[Math.floor(Math.random() * opts.length)];
+  else pick = opts.reduce((best, d) =>
+    Math.hypot(c + d[0] - tx, r + d[1] - ty) < Math.hypot(c + best[0] - tx, r + best[1] - ty) ? d : best);
+  m.dx = pick[0]; m.dy = pick[1];
+}
+function stepMarines() {
+  for (const m of marines) {
+    if (m.hold > 0) { m.hold--; continue; }                 // engaged by Zoro: frozen in place
+    if (m.stun > 0) { m.stun--; continue; }                 // zapped by Nami / dazed by Jinbe's shield
+    if (m.delay > 0) { m.delay--; continue; }
+    m.acc += (m.scared ? SCARED_SPEED : KNIGHT_SPEED) * (slow > 0 ? 0.45 : 1);       // Usopp's Sticky Star
+    while (m.acc >= 1) { stepEntity(m, marineChoose); m.acc--; }
+  }
+}
+function updateShip() {
+  if (target) {
+    const dx = target.x - ship.x, dy = target.y - ship.y;
+    if (Math.hypot(dx, dy) > 24) Math.abs(dx) > Math.abs(dy) ? setWant(Math.sign(dx), 0) : setWant(0, Math.sign(dy));
+  }
+  const n = speedBoost > 0 ? 3 : 2;                    // Franky's boost: 50% faster
+  for (let k = 0; k < n; k++) { tryEarlyTurn(ship); stepEntity(ship, shipChoose); }
+  if (ship.dx) ship.left = ship.dx < 0;
+  if (ship.dx || ship.dy) moved = true;
+  if (bonus && Math.hypot(ship.x - center(bonus.c), ship.y - center(bonus.r)) < 16) eatBonus();
+  const c = Math.floor(ship.x / T), r = Math.floor(ship.y / T);
+  if (food[r] && food[r][c] && Math.hypot(ship.x - center(c), ship.y - center(r)) < 14) eatFoodAt(c, r);
+}
+function eatFoodAt(c, r, quiet) {                      // Luffy walking over food, or Robin's hands grabbing it
+  const kind = food[r][c]; food[r][c] = 0;
+  if (kind === 1) {
+    berriesLeft--; eaten++; if (!quiet) sfxChomp();
+  }
+  score += kind === 2 ? 50 : 10;
+  if (kind === 2) {
+    sfxFruit();
+    fright = FRIGHT_FRAMES; combo = 0;
+    for (const m of marines) { m.scared = true; m.dx = -m.dx; m.dy = -m.dy; }
+  }
+  updateHud();
+  if (berriesLeft === 0) finish(true);                 // clearing the ladi pav wins, fruit or not
+}
+function bounceOff(m) {
+  if (bounceCd > 0) return;
+  const still = !ship.dx && !ship.dy;
+  const ahead = ship.dx * (m.x - ship.x) + ship.dy * (m.y - ship.y) > 0;        // is the Knight in front of him?
+  if (!still && !ahead) return;                                                  // hit from behind or the side: just pass through
+  if (still) {                                                                   // standing still: bounce away from the Knight
+    const ax = ship.x - m.x, ay = ship.y - m.y;
+    ship.want = Math.abs(ax) > Math.abs(ay) ? { dx: Math.sign(ax), dy: 0 } : { dx: 0, dy: Math.sign(ay) };
+  } else { ship.dx = -ship.dx; ship.dy = -ship.dy; ship.want = { dx: ship.dx, dy: ship.dy }; }   // other direction, and keep going that way
+  bounceCd = 25; shake = 6; floats.push({ x: ship.x, y: ship.y - 22, text: 'BOING!', life: 40 }); sfxBounce();
+}
+// ---------- Pac-Man style bonus food ----------
+const FOODS = ['Pav Bhaji', 'Chili Cheese Toast', 'GC Burrito', 'Napoleon Cake'];
+function spawnBonus() {
+  let kind; do { kind = Math.floor(Math.random() * FOODS.length); } while (kind === lastFood);
+  lastFood = kind;
+  bonus = { c: SHIP_START[0], r: SHIP_START[1], kind, life: BONUS_FRAMES };      // appears on Luffy's start tile
+  floats.push({ x: center(bonus.c), y: center(bonus.r) - 26, text: FOODS[kind] + '!', life: 70 });
+  sfxBonus();
+}
+// Eating it pauses the game and lets you pick which Straw Hat to call. Each one has a different power.
+const POWERS = [
+  { move: 'Santoryu',        desc: 'Locks swords with the nearest knight and holds it still for 5 seconds.' },
+  { move: 'Thunder Tempo',   desc: 'Zaps every knight with lightning: all stunned for 2.5 seconds.' },
+  { move: 'Sticky Star',     desc: 'Slows every knight to under half speed for 8 seconds.' },
+  { move: 'Diable Jambe',    desc: 'Kicks the 2 nearest knights back to their start box (+200 each).' },
+  { move: 'Mil Fleur',       desc: 'Sprouts hands that grab all the ladi pav around you.' },
+  { move: 'Coup de Vent',    desc: 'Super boost: you move 50% faster for 8 seconds.' },
+  { move: 'Soul Lullaby',    desc: 'Knights nod off and wander aimlessly for 8 seconds.' },
+  { move: 'Fish-Man Karate', desc: 'Water shield for 8 seconds: knights get knocked back and you take no damage.' },
+];
+const POWER_FRAMES = 480;                           // 8 seconds
+const dist = m => Math.hypot(m.x - ship.x, m.y - ship.y);
+function eatBonus() {
+  const pts = FOOD_POINTS[bonus.kind], x = center(bonus.c), y = center(bonus.r);
+  score += pts; floats.push({ x, y: y - 8, text: '+' + pts, life: 60 }); bonus = null; bonusCooldown = BONUS_COOLDOWN; updateHud();
+  openPicker();
+}
+function crewSprite(i) {                            // small portrait for the picker, drawn with the normal sprite code
+  const c = document.createElement('canvas'); c.width = 200; c.height = 180;                       // 2x the size shown, so it stays crisp on Retina
+  const saved = ctx; ctx = c.getContext('2d');
+  try { ctx.translate(60, 100); ctx.scale(4, 4); drawCrew(i, 0.8); } finally { ctx = saved; }
+  return c.toDataURL();
+}
+let pickSprites = null;
+function openPicker() {
+  if (!pickSprites) pickSprites = CREW.map((_, i) => crewSprite(i));
+  mode = 'pick'; target = null;
+  if (usedCrew.size >= CREW.length) usedCrew.clear();       // everyone has helped once: a fresh cycle, so there is always someone to pick
+  $('pick').innerHTML = `<h2>Call a Straw Hat!</h2><p style="margin:0">Pick who comes to help <small>(click, or press 1–${CREW.length})</small></p>
+    <div class="pickgrid">${CREW.map((n, i) => `<button class="pickbtn${usedCrew.has(i) ? ' used' : ''}" data-who="${i}"${usedCrew.has(i) ? ' disabled' : ''}><span class="pk-n">${i + 1}</span><img alt="" src="${pickSprites[i]}"><b>${n}</b><i>${POWERS[i].move}</i><small>${usedCrew.has(i) ? 'Already helped this run — pick someone new!' : POWERS[i].desc}</small></button>`).join('')}</div>`;
+  $('pick').querySelectorAll('.pickbtn:not(.used)').forEach(b => b.onclick = () => choosePower(+b.dataset.who));
+  $('start').classList.add('hidden'); $('end').classList.add('hidden'); $('pick').classList.remove('hidden');
+  $('overlay').classList.remove('hidden');
+}
+function choosePower(who) {
+  if (mode !== 'pick' || usedCrew.has(who)) return;        // used Straw Hats can't be called again this run
+  usedCrew.add(who);
+  $('overlay').classList.add('hidden'); $('pick').classList.add('hidden'); mode = 'play';
+  const name = CREW[who], pw = POWERS[who];
+  const byDist = marines.slice().sort((a, b) => dist(a) - dist(b));
+  const active = byDist.filter(m => m.delay <= 0);
+  let cam = true;
+  if (who === 0) {                                  // Zoro: holds the nearest knight for 5s
+    const free = byDist.filter(m => m.hold <= 0 && m.delay <= 0 && !m.scared);
+    const near = (free.length ? free : active.length ? active : byDist)[0];
+    near.hold = ENGAGE_FRAMES; near.holdWho = who; near.holdLeft = ship.x < near.x;   // he arrives on the far side from Luffy
+    floats.push({ x: near.x, y: near.y - 30, text: name + '!', life: 70 }); cam = false;
+  } else if (who === 1) { marines.forEach(m => { m.stun = 150; }); flashFx = 10; shake = 10; }
+  else if (who === 2) slow = POWER_FRAMES;
+  else if (who === 3) {                             // Sanji: kicks the two nearest knights back home
+    for (const m of (active.length ? active : byDist).slice(0, 2)) {
+      floats.push({ x: m.x, y: m.y - 6, text: '+200', life: 60 }); score += 200;
+      Object.assign(m, newMarine(m.i), { delay: 240 });
+    }
+    updateHud(); shake = 8;
+  } else if (who === 4) {                           // Robin: hands harvest the ladi pav around Luffy
+    let got = 0;
+    for (let r = 0; r < ROWS && mode === 'play'; r++) for (let c = 0; c < COLS && mode === 'play'; c++) {
+      if (food[r][c] === 1 && Math.hypot(center(c) - ship.x, center(r) - ship.y) <= 3.6 * T) { eatFoodAt(c, r, true); got++; floats.push({ x: center(c), y: center(r), text: '🌸', life: 40 }); }
+    }
+    if (got) sfxChomp();
+  } else if (who === 5) speedBoost = POWER_FRAMES;
+  else if (who === 6) confuse = POWER_FRAMES;
+  else if (who === 7) shield = POWER_FRAMES;
+  if (cam) cameo = { who, x: ship.x + (ship.left ? 26 : -26), y: ship.y, left: ship.left, life: 90 };
+  floats.push({ x: ship.x, y: ship.y - 34, text: pw.move + '!', life: 80 });
+  sfxPower(who);
+}
+
+function checkCollisions() {
+  for (const m of marines) {
+    if (Math.hypot(m.x - ship.x, m.y - ship.y) >= 26) continue;
+    if (m.scared) {                       // sink the Marine ship
+      const pts = 200 * 2 ** combo++;
+      sfxKnockout();
+      score += pts; floats.push({ x:m.x, y:m.y, text:'+' + pts, life:60 });
+      Object.assign(m, newMarine(m.i), { delay:180 });
+      updateHud();
+    } else if (m.hold > 0 || m.stun > 0) {   // busy fighting a Straw Hat, or stunned: harmless for now
+      continue;
+    } else if (fright > 0) {              // Gear 5: invulnerable, and a head-on hit bounces him back like rubber
+      bounceOff(m);
+    } else if (shield > 0) {              // Jinbe's water shield: the knight is knocked back and dazed
+      m.dx = -m.dx; m.dy = -m.dy; m.stun = 45; shake = 5;
+    } else if (inv === 0) {
+      lives--; shake = 15; updateHud(); sfxHurt();
+      if (lives <= 0) { sinking = 1; ship.dx = ship.dy = 0; return; }
+      placeActors(); inv = INV_FRAMES;
+      return;
+    }
+  }
+}
+
+function step() {
+  if (mode === 'pick' || mode === 'paused') return;       // frozen while you choose a Straw Hat, or while paused
+  t++;
+  updateDrums(); syncMusic();
+  if (shake > 0) shake--;
+  for (const f of floats) { f.y -= 0.6; f.life--; }
+  floats = floats.filter(f => f.life > 0);
+  if (mode !== 'play') return stepMarines();
+  if (sinking) {
+    sinking++;
+    stepMarines();
+    if (sinking > SINK_FRAMES + SINK_PAUSE) finish(false);
+    return;
+  }
+  updateShip();
+  if (mode !== 'play') return;
+  stepMarines();
+  checkCollisions();
+  if (inv > 0) inv--;
+  if (bounceCd > 0) bounceCd--;
+  if (bonus && --bonus.life <= 0) { bonus = null; bonusCooldown = BONUS_COOLDOWN; }       // uncollected treats vanish, then the cooldown starts
+  if (bonusCooldown > 0) bonusCooldown--;
+  if (moved && ++bonusClock >= BONUS_EVERY && !bonus && bonusCooldown <= 0) { bonusClock = 0; spawnBonus(); }   // every 7 seconds of play once he's moving, never within 5s of the last treat going
+  if (speedBoost > 0) speedBoost--;
+  if (shield > 0) shield--;
+  if (slow > 0) slow--;
+  if (confuse > 0) confuse--;
+  if (flashFx > 0) flashFx--;
+  if (cameo && --cameo.life <= 0) cameo = null;
+  if (fright > 0 && --fright === 0) { marines.forEach(m => m.scared = false); inv = Math.max(inv, 60); }   // 1s of grace as Gear 5 wears off
+}
+
+// ---------- drawing ----------
+function drawLuffy(ph) {                      // faces right; feet at y=16
+  const sw = Math.sin(ph) * 3;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(0, 16, 10, 3, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#f2c9a0'; ctx.fillRect(-5 + sw, 10, 4, 5); ctx.fillRect(1 - sw, 10, 4, 5);          // legs
+  ctx.fillStyle = '#c9a24a'; ctx.fillRect(-6 + sw, 14, 6, 2.5); ctx.fillRect(0 - sw, 14, 6, 2.5);      // sandals
+  ctx.fillStyle = '#2b4fa8'; ctx.fillRect(-7, 5, 14, 6);                                               // blue shorts
+  ctx.fillStyle = '#f2c9a0'; ctx.fillRect(-10, -2 - sw * 0.4, 3, 8); ctx.fillRect(7, -2 + sw * 0.4, 3, 8);   // arms
+  ctx.fillStyle = '#d63a2e'; ctx.fillRect(-7, -4, 14, 10);                                             // red vest
+  ctx.fillStyle = '#f2c9a0'; ctx.fillRect(-1.5, -4, 3, 10);                                            // open chest
+  ctx.strokeStyle = '#8a3b2b'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-1, -1); ctx.lineTo(1, 3); ctx.moveTo(1, -1); ctx.lineTo(-1, 3); ctx.stroke();   // X scar
+  ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.arc(0, -10, 7, 0, 7); ctx.fill();                   // head
+  ctx.fillStyle = '#1b1b1b'; ctx.beginPath(); ctx.arc(0, -11, 7.2, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();   // hair
+  ctx.fillRect(2, -9.5, 1.8, 2.6); ctx.fillRect(-3.5, -9.5, 1.8, 2.6);                                 // eyes
+  ctx.strokeStyle = '#8a3b2b'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(1.6, -6.4); ctx.lineTo(3.4, -6.4); ctx.stroke();   // scar under eye
+  ctx.strokeStyle = '#7a2a1a'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(0, -7, 3.6, 0.15, Math.PI - 0.15); ctx.stroke();   // wide grin
+  ctx.fillStyle = '#f0c44c'; ctx.beginPath(); ctx.ellipse(0, -15, 12, 3.6, 0, 0, 7); ctx.fill();      // straw hat
+  ctx.beginPath(); ctx.ellipse(0, -17.5, 6.8, 5, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#c0392b'; ctx.fillRect(-6.6, -18, 13.2, 2.4);
+}
+
+const KNIGHTS = ['Shamrock', 'Sommers', 'Qilingham', 'Gunko'];   // index = Marine slot, so Shamrock leads the chase
+
+function drawGear5(ph) {                       // Sun God Nika: white hair, clouds, arms thrown up, huge laugh
+  const sw = Math.sin(ph) * 2, flap = k => Math.sin(t / 6 + k) * 1.5;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(0, 16, 11, 3, 0, 0, 7); ctx.fill();
+  ctx.save(); ctx.translate(0, Math.sin(t / 5) * 1.3);                                                  // joyful bounce
+  const aura = ctx.createRadialGradient(0, -2, 4, 0, -2, 30);
+  aura.addColorStop(0, 'rgba(255,255,255,.6)'); aura.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = aura; ctx.beginPath(); ctx.arc(0, -2, 30, 0, 7); ctx.fill();
+  ctx.fillStyle = '#f0c44c'; ctx.beginPath(); ctx.ellipse(-10, -7, 3, 8, 0.3, 0, 7); ctx.fill();         // hat slung on his back
+  ctx.fillStyle = '#f2c9a0'; ctx.fillRect(-8 + sw, 10, 4, 5); ctx.fillRect(4 - sw, 10, 4, 5);           // wide stance
+  ctx.fillStyle = '#c9a24a'; ctx.fillRect(-9 + sw, 14, 6, 2.5); ctx.fillRect(3 - sw, 14, 6, 2.5);
+  ctx.fillStyle = '#eef0ff'; ctx.fillRect(-8, 5, 16, 6);                                                // white shorts
+  ctx.fillStyle = '#d63a2e'; ctx.fillRect(-7, -4, 14, 10);
+  ctx.fillStyle = '#f2c9a0'; ctx.fillRect(-1.5, -4, 3, 10);
+  ctx.strokeStyle = '#8a3b2b'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-1, -1); ctx.lineTo(1, 3); ctx.moveTo(1, -1); ctx.lineTo(-1, 3); ctx.stroke();
+  ctx.strokeStyle = '#f2c9a0'; ctx.lineWidth = 3.4; ctx.lineCap = 'round'; ctx.fillStyle = '#f2c9a0';  // arms up in a V
+  for (const d of [-1, 1]) {
+    const hy = -18 + flap(d);
+    ctx.beginPath(); ctx.moveTo(d * 6, -3); ctx.lineTo(d * 14, hy); ctx.stroke();
+    ctx.beginPath(); ctx.arc(d * 14.5, hy - 1, 2.7, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.93)';                                                              // cloud puffs
+  for (const [px, py, pr, k] of [[-9, -3, 3.4, 0], [-11, -1, 2.6, 1], [9, -3, 3.4, 2], [11, -1, 2.6, 3], [-9, 7, 3.6, 4], [9, 7, 3.6, 5], [0, 8.5, 3.2, 6], [-13, 5, 2.4, 7], [13, 5, 2.4, 8]]) {
+    ctx.beginPath(); ctx.arc(px + flap(k) * 0.4, py + flap(k + 2) * 0.4, pr, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.arc(0, -10, 7, 0, 7); ctx.fill();                      // head
+  ctx.fillStyle = '#f6f8ff'; ctx.strokeStyle = '#b9bfd6'; ctx.lineWidth = 1;                             // wild white hair
+  ctx.beginPath(); ctx.arc(0, -11, 7.6, Math.PI * 1.0, Math.PI * 2.0); ctx.fill();
+  ctx.beginPath(); for (const dx of [-7, -3.5, 0, 3.5, 7]) { ctx.moveTo(dx - 2.4, -15); ctx.lineTo(dx + flap(dx) * 0.3, -22 - (dx === 0 ? 2 : 0)); ctx.lineTo(dx + 2.4, -15); }
+  ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = '#1b1b1b'; ctx.lineWidth = 1.5;                                                      // laughing eyes
+  ctx.beginPath(); ctx.arc(-3, -9.2, 1.7, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+  ctx.beginPath(); ctx.arc(3, -9.2, 1.7, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+  ctx.fillStyle = '#7a2a1a'; ctx.beginPath(); ctx.arc(0, -7.6, 5, 0.02, Math.PI - 0.02); ctx.closePath(); ctx.fill();   // huge open grin
+  ctx.fillStyle = '#fff'; ctx.fillRect(-4, -7.8, 8, 1.8);
+  ctx.fillStyle = '#fff'; ctx.font = '9px serif'; ctx.textAlign = 'center';                               // sparkles
+  for (let k = 0; k < 3; k++) { const a = t / 14 + k * 2.1; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t / 5 + k); ctx.fillText('✦', Math.cos(a) * 18, -4 + Math.sin(a) * 14); }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawKnight(who, scared, ph) {       // faces right; feet at y=16
+  const mix = (hex, k = 0.55) => {             // pull every colour toward lavender while scared
+    if (!scared) return hex;
+    const n = parseInt(hex.slice(1), 16), tg = [0x8c, 0x7a, 0xe6];
+    return `rgb(${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v, i) => Math.round(v + (tg[i] - v) * k))})`;
+  };
+  const sw = Math.sin(ph) * 3, SKIN = '#f2c9a0', GOLD = '#d4a737';
+  const coat = ['#22222a', '#9b4fd8', '#2b2b33', '#27324a'][who];
+  const cloak = who === 0 ? '#2f8f9a' : '#2a2a33';
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(0, 16, 11, 3, 0, 0, 7); ctx.fill();
+  // cloak
+  ctx.fillStyle = mix(cloak); ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(-4, -5); ctx.lineTo(-13, 14); ctx.lineTo(1, 14); ctx.lineTo(5, -5); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = mix(GOLD); ctx.fillRect(-13, 12.5, 14, 1.6);
+  // legs + boots (Gunko goes bare-legged)
+  ctx.fillStyle = mix(who === 3 ? SKIN : '#1c1c22'); ctx.fillRect(-5 + sw, 8, 4.5, 7); ctx.fillRect(0.5 - sw, 8, 4.5, 7);
+  ctx.fillStyle = mix('#2b1d12'); ctx.fillRect(-6 + sw, 14, 6, 2.5); ctx.fillRect(0 - sw, 14, 6, 2.5);
+  // uniform
+  ctx.fillStyle = mix(coat); ctx.beginPath(); ctx.roundRect(-7, -5, 14, 14, 3); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = mix(GOLD); ctx.fillRect(-7, 5, 14, 2); ctx.fillRect(-0.8, -3, 1.6, 8);              // belt + button line
+  ctx.fillRect(-9, -6, 4, 3); ctx.fillRect(5, -6, 4, 3);                                               // epaulettes
+  ctx.fillStyle = mix(coat); ctx.fillRect(-10, -3 - sw * 0.3, 3, 8);                                   // back arm
+  // front arm (+ weapon)
+  const ay = -1 + sw * 0.3;
+  ctx.fillStyle = mix(who === 3 ? SKIN : who === 2 ? '#e0b33b' : coat); ctx.fillRect(7, ay, 8, 3.5);
+  if (who === 3) { ctx.fillStyle = mix('#111'); for (let k = 0; k < 3; k++) { const px = 8 + k * 2.6; ctx.beginPath(); ctx.moveTo(px, ay + 0.2); ctx.lineTo(px + 2, ay + 1.75); ctx.lineTo(px, ay + 3.3); ctx.fill(); } }   // arrow marks
+  ctx.fillStyle = mix(SKIN); ctx.beginPath(); ctx.arc(15.5, ay + 1.8, 2, 0, 7); ctx.fill();
+  if (who === 0 || who === 1) {
+    ctx.fillStyle = mix('#e6edf2'); ctx.strokeStyle = mix('#7d8a96');
+    ctx.beginPath(); ctx.moveTo(16, ay + 0.2); ctx.lineTo(31, ay + (who === 0 ? -0.5 : 0.5)); ctx.lineTo(16, ay + 2.4); ctx.closePath(); ctx.fill(); ctx.stroke();     // blade
+    ctx.fillStyle = mix(GOLD); ctx.fillRect(14.5, ay - 2.2, 2.2, 7.6);                                  // guard / hilt
+    if (who === 1) { ctx.beginPath(); for (let k = -1; k <= 1; k++) { ctx.moveTo(14.5, ay + 1.6 + k * 2.6); ctx.lineTo(10.5, ay + 1.6 + k * 4); ctx.lineTo(14.5, ay + 2.6 + k * 2.6); } ctx.fill(); }   // spiked hilt
+  }
+  // head
+  ctx.fillStyle = mix(who === 2 ? '#e0b33b' : SKIN); ctx.strokeStyle = mix(who === 2 ? '#a87a18' : '#c89a72'); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(0, -11, 7, 0, 7); ctx.fill(); ctx.stroke();
+  const cap = col => { ctx.fillStyle = mix(col); ctx.beginPath(); ctx.arc(0, -12, 7.6, Math.PI * 1.02, Math.PI * 1.98); ctx.fill(); };
+  const eye = () => { ctx.fillStyle = '#1b1b1b'; ctx.fillRect(2.4, -10.5, 1.8, 2.4); ctx.fillRect(-2.8, -10.5, 1.8, 2.4); };
+  if (who === 0) {                                                       // Shamrock: long red hair, braid, no scar
+    cap('#c0392b'); ctx.fillStyle = mix('#c0392b');
+    ctx.fillRect(-8, -12, 4, 11); ctx.beginPath(); ctx.ellipse(-7, 0, 2, 4.5, 0.15, 0, 7); ctx.fill();
+    ctx.fillStyle = mix(GOLD); ctx.fillRect(-8.6, -3, 3.2, 1.4); eye();
+  } else if (who === 1) {                                                // Sommers: spiky blond hair
+    cap('#f2d16b'); ctx.fillStyle = mix('#f2d16b'); ctx.beginPath();
+    for (const dx of [-5, -1.5, 2, 5.5]) { ctx.moveTo(dx - 2, -17); ctx.lineTo(dx + 0.4, -22); ctx.lineTo(dx + 2.6, -17); }
+    ctx.fill(); eye();
+  } else if (who === 2) {                                                // Qilingham: golden scales, black snout, horn
+    ctx.strokeStyle = mix('#a87a18'); ctx.lineWidth = 0.9;
+    for (const [sx, sy] of [[-4, -15], [0, -16], [-5, -10], [-1, -7]]) { ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI); ctx.stroke(); }
+    ctx.fillStyle = mix('#f2e08a'); ctx.beginPath(); ctx.moveTo(-1.5, -17.5); ctx.lineTo(0.5, -26); ctx.lineTo(2.5, -17.5); ctx.fill();
+    ctx.fillStyle = mix('#1a1a1a'); ctx.beginPath(); ctx.roundRect(1.5, -10.5, 8.5, 5.5, 2.5); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-0.5, -12.5, 1.9, 0, 7); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(-0.1, -12.5, 0.9, 0, 7); ctx.fill();
+  } else {                                                               // Gunko: blue hair, goggles
+    cap('#3f7fe0'); ctx.fillStyle = mix('#3f7fe0'); ctx.fillRect(-8, -12, 3.5, 9);
+    ctx.fillStyle = mix('#333'); ctx.fillRect(-7.8, -16, 15.6, 2);
+    for (const lx of [-2.6, 3]) { ctx.fillStyle = mix('#f5c542'); ctx.strokeStyle = mix('#333'); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(lx, -15, 2.5, 0, 7); ctx.fill(); ctx.stroke(); }
+    eye();
+  }
+}
+
+function drawShip(x, y, enemy, left, scared, who) {      // draws Luffy (or a God's Knight when enemy)
+  ctx.save();
+  ctx.translate(x, y);
+  if (left) ctx.scale(-1, 1);
+  enemy ? drawKnight(who, scared, (x + y) / 4)                                                                       // legs only swing while actually moving
+        : (fright > 0 && mode === 'play' && !sinking) ? drawGear5((x + y) / 4) : drawLuffy((x + y) / 4);            // Gear 5 while the fruit lasts
+  ctx.restore();
+}
+
+function drawKnockedOut() {                    // Luffy topples over, sees stars, fades out
+  const p = Math.min(1, sinking / SINK_FRAMES);
+  ctx.save();
+  ctx.globalAlpha = 1 - Math.max(0, (p - 0.6) / 0.4);
+  ctx.translate(ship.x, ship.y + 16); ctx.rotate((ship.left ? 1 : -1) * 1.45 * Math.min(1, p * 2.5)); ctx.translate(-ship.x, -(ship.y + 16));
+  drawShip(ship.x, ship.y, false, ship.left);
+  ctx.restore();
+  if (p < 0.85) {
+    ctx.fillStyle = '#ffe066'; ctx.font = '14px serif'; ctx.textAlign = 'center';
+    for (let k = 0; k < 3; k++) { const a = sinking / 8 + k * 2.1; ctx.fillText('★', ship.x + Math.cos(a) * 14, ship.y - 22 + Math.sin(a) * 4); }
+  }
+}
+
+let wallLayer;
+// Landmarks built from wall tiles: [col, row, width, height] giants' halls, and single-tile axes in the ground.
+const HALLS = [[9, 7, 5, 2], [8, 2, 3, 1], [12, 2, 3, 1], [8, 10, 3, 1], [12, 10, 3, 1]];
+const AXES = [[5, 4], [17, 8]];
+
+function drawHall(g, x, y, w, h) {          // oversized timber longhall with a carved ridge and shield wall
+  const wallTop = y + h * 0.45, wallH = h - 4 - (wallTop - y);
+  g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x + w / 2, y + h - 2, w / 2 - 2, 4, 0, 0, 7); g.fill();
+  g.fillStyle = '#a8743f'; g.fillRect(x + 4, wallTop, w - 8, wallH);                                // planks
+  g.strokeStyle = '#6b4423'; g.lineWidth = 1;
+  for (let px = x + 8; px < x + w - 4; px += 6) { g.beginPath(); g.moveTo(px, wallTop + 2); g.lineTo(px, wallTop + wallH); g.stroke(); }
+  g.fillStyle = '#5b3d26'; g.fillRect(x + 4, wallTop, w - 8, 3); g.fillRect(x + 4, wallTop + wallH - 3, w - 8, 3);
+  const ridge = y + 3, eave = wallTop + 3;                                                            // roof
+  g.fillStyle = '#5a9a46'; g.beginPath();
+  g.moveTo(x + 1, eave); g.lineTo(x + w * 0.1, ridge); g.lineTo(x + w * 0.9, ridge); g.lineTo(x + w - 1, eave); g.closePath(); g.fill();
+  g.fillStyle = '#3f7a35'; g.fillRect(x + w * 0.08, (ridge + eave) / 2 + 1, w * 0.84, (eave - ridge) / 2 - 1);
+  g.strokeStyle = 'rgba(0,0,0,.2)';
+  for (let yy = ridge + 6; yy < eave - 2; yy += 6) { g.beginPath(); g.moveTo(x + w * 0.1 - (yy - ridge) * 0.3, yy); g.lineTo(x + w * 0.9 + (yy - ridge) * 0.3, yy); g.stroke(); }
+  g.strokeStyle = '#4a2f19'; g.lineWidth = 2.5; g.lineCap = 'round';                                  // dragon-head ridge ends
+  for (const sx of [x + w * 0.1, x + w * 0.9]) {
+    const d = sx < x + w / 2 ? -1 : 1;
+    g.beginPath(); g.moveTo(sx, ridge + 2); g.quadraticCurveTo(sx + d * 7, ridge - 4, sx + d * 2, ridge - 6); g.stroke();
+  }
+  const dw = Math.min(26, w * 0.14), dh = wallH - 5;                                                  // great door
+  g.fillStyle = '#3a2412'; g.beginPath(); g.roundRect(x + w / 2 - dw / 2, wallTop + wallH - dh - 3, dw, dh, [dw / 2, dw / 2, 0, 0]); g.fill();
+  g.strokeStyle = '#d8b878'; g.lineWidth = 1.5; g.stroke();
+  const n = Math.max(2, Math.floor((w / 2 - dw) / 18));                                               // shields and windows either side
+  for (let i = 0; i < n; i++) for (const side of [-1, 1]) {
+    const cx = x + w / 2 + side * (dw / 2 + 12 + i * 18), cy = wallTop + wallH / 2 + 1;
+    if (cx < x + 8 || cx > x + w - 8) continue;
+    if ((i + (side > 0)) % 2) { g.fillStyle = '#ffd878'; g.fillRect(cx - 3, cy - 4, 6, 8); g.strokeStyle = '#4a2f19'; g.lineWidth = 1; g.strokeRect(cx - 3, cy - 4, 6, 8); }
+    else { g.fillStyle = (i % 2) ? '#2e6fb0' : '#c0392b'; g.strokeStyle = '#e8d29c'; g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, 5, 0, 7); g.fill(); g.stroke();
+           g.fillStyle = '#e8d29c'; g.beginPath(); g.arc(cx, cy, 1.4, 0, 7); g.fill(); }
+  }
+}
+
+function drawAxe(g, x, y) {                 // giant double-bit axe buried in a grassy mound
+  g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x + T / 2, y + T - 4, 15, 4, 0, 0, 7); g.fill();
+  g.fillStyle = '#6b4a2a'; g.beginPath(); g.ellipse(x + T / 2, y + T - 7, 14, 5, 0, 0, 7); g.fill();      // dirt mound
+  g.fillStyle = '#5c9a4a'; g.beginPath(); g.ellipse(x + T / 2, y + T - 9, 13, 4, 0, 0, 7); g.fill();      // grass
+  g.save(); g.translate(x + T / 2, y + T - 9); g.rotate(-0.18);
+  g.fillStyle = '#7a4a22'; g.fillRect(-2, -32, 4, 33);                                                     // haft
+  g.fillStyle = '#4a2f19'; for (let k = 0; k < 4; k++) g.fillRect(-2.5, -8 - k * 4, 5, 1.2);               // leather wrap
+  g.fillStyle = '#b9c3cc'; g.strokeStyle = '#4f5961'; g.lineWidth = 1.2;                                   // two crescent blades
+  for (const d of [-1, 1]) {
+    g.beginPath(); g.moveTo(d * 2, -31); g.quadraticCurveTo(d * 17, -38, d * 14, -20); g.quadraticCurveTo(d * 9, -25, d * 2, -23); g.closePath(); g.fill(); g.stroke();
+  }
+  g.fillStyle = '#e8eef2'; g.beginPath(); g.ellipse(-9, -29, 3, 1.2, -0.5, 0, 7); g.fill();               // glint
+  g.fillStyle = '#4f5961'; g.fillRect(-3, -33, 6, 3);                                                      // cap
+  g.restore();
+}
+
+function buildWallLayer() {
+  wallLayer = document.createElement('canvas'); wallLayer.width = Math.round(W * RSX); wallLayer.height = Math.round(H * RSY);
+  const g = wallLayer.getContext('2d'); g.scale(RSX, RSY);
+  let seed = 7; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (MAP[r][c] !== '#') continue;
+    const hall = HALLS.find(([hc, hr, hw, hh]) => c >= hc && c < hc + hw && r >= hr && r < hr + hh);
+    if (hall) { if (c === hall[0] && r === hall[1]) drawHall(g, c * T, r * T, hall[2] * T, hall[3] * T); continue; }
+    if (AXES.some(([ac, ar]) => ac === c && ar === r)) { drawAxe(g, c * T, r * T); continue; }
+    const x = c * T, y = r * T, border = r === 0 || r === ROWS - 1 || c === 0 || c === COLS - 1;
+    if (border) {                                   // giant tree trunks around the island
+      g.fillStyle = '#3e2916'; g.fillRect(x, y, T, T);
+      g.fillStyle = '#5b3d26'; g.fillRect(x + 1, y + 1, T - 2, T - 2);
+      g.strokeStyle = '#3e2916'; g.lineWidth = 2;
+      for (let k = 0; k < 4; k++) {
+        const px = x + 5 + k * 10 + rand() * 4;
+        g.beginPath(); g.moveTo(px, y); g.bezierCurveTo(px + 4, y + 12, px - 4, y + 26, px, y + T); g.stroke();
+      }
+      g.fillStyle = '#4f8a3f';
+      for (let k = 0; k < 3; k++) { g.beginPath(); g.ellipse(x + rand() * T, y + rand() * T, 5 + rand() * 4, 3, 0, 0, 7); g.fill(); }
+    } else {                                        // Elbaf village: timber longhouses with turf and thatch roofs
+      const [roof, roofDark] = [['#5a9a46', '#3f7a35'], ['#b8924f', '#8f6e36'], ['#4f8a6a', '#37694f']][Math.floor(rand() * 3)];
+      g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(x + T / 2, y + T - 3, T / 2 - 3, 3, 0, 0, 7); g.fill();
+      g.fillStyle = '#a8743f'; g.fillRect(x + 5, y + 21, T - 10, 15);                          // plank walls
+      g.strokeStyle = '#6b4423'; g.lineWidth = 1;
+      for (let px = x + 9; px < x + T - 5; px += 5) { g.beginPath(); g.moveTo(px, y + 22); g.lineTo(px, y + 36); g.stroke(); }
+      g.fillStyle = '#5b3d26'; g.fillRect(x + 5, y + 21, T - 10, 2); g.fillRect(x + 5, y + 34, T - 10, 3);   // timber beams
+      g.fillStyle = roof; g.beginPath(); g.moveTo(x + 1, y + 24); g.lineTo(x + T / 2, y + 3); g.lineTo(x + T - 1, y + 24); g.closePath(); g.fill();
+      g.fillStyle = roofDark; g.beginPath(); g.moveTo(x + T / 2, y + 3); g.lineTo(x + T - 1, y + 24); g.lineTo(x + T / 2, y + 24); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(0,0,0,.2)'; g.lineWidth = 1;                                         // thatch rows
+      for (let k = 0; k < 3; k++) { const yy = y + 10 + k * 5, hw = 5 + k * 5; g.beginPath(); g.moveTo(x + T / 2 - hw, yy + 3); g.lineTo(x + T / 2 + hw, yy + 3); g.stroke(); }
+      g.strokeStyle = '#4a2f19'; g.lineWidth = 2; g.lineCap = 'round';                          // carved gable horns
+      g.beginPath(); g.moveTo(x + T / 2 - 4, y + 0.5); g.lineTo(x + T / 2, y + 4); g.lineTo(x + T / 2 + 4, y + 0.5); g.stroke();
+      g.fillStyle = '#4a2f19'; g.beginPath(); g.roundRect(x + T / 2 - 4, y + 26, 8, 10, [4, 4, 0, 0]); g.fill();   // door
+      if (rand() > 0.5) { g.fillStyle = '#ffd878'; g.fillRect(x + 9, y + 26, 5, 5); g.strokeStyle = '#4a2f19'; g.lineWidth = 1; g.strokeRect(x + 9, y + 26, 5, 5); }
+      else { g.fillStyle = '#c0392b'; g.strokeStyle = '#e8d29c'; g.lineWidth = 1.5; g.beginPath(); g.arc(x + T - 12, y + 29, 4, 0, 7); g.fill(); g.stroke();   // round shield
+             g.fillStyle = '#e8d29c'; g.beginPath(); g.arc(x + T - 12, y + 29, 1.2, 0, 7); g.fill(); }
+      if (rand() > 0.55) { g.fillStyle = '#7a7a78'; g.fillRect(x + T - 14, y + 8, 5, 9); g.fillStyle = '#4a4a48'; g.fillRect(x + T - 14, y + 8, 5, 2); }   // chimney
+    }
+  }
+}
+function drawWalls() { if (!wallLayer) buildWallLayer(); ctx.drawImage(wallLayer, 0, 0, W, H); }
+
+// drifting leaves and fireflies over the fjord
+const motes = Array.from({ length: 26 }, (_, i) => ({ x:(i * 97) % W, y:(i * 53) % H, v:0.2 + (i % 5) * 0.08, leaf:i % 3 !== 0, ph:i }));
+function drawMotes() {
+  for (const m of motes) {
+    m.x = (m.x + m.v) % W; m.y += Math.sin((t + m.ph * 20) / 40) * 0.25;
+    if (m.leaf) { ctx.fillStyle = 'rgba(160,210,110,.45)'; ctx.beginPath(); ctx.ellipse(m.x, m.y, 4, 2, t / 60 + m.ph, 0, 7); ctx.fill(); }
+    else { ctx.fillStyle = `rgba(255,240,150,${0.35 + 0.3 * Math.sin(t / 15 + m.ph)})`; ctx.beginPath(); ctx.arc(m.x, m.y, 1.8, 0, 7); ctx.fill(); }
+  }
+}
+
+function drawLadiPav(x, y, k, rot) {            // a pair of soft ladi pav rolls baked together
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(k, k); ctx.lineJoin = 'round';
+  const lw = 1.5 / (k < 0.7 ? k * 1.2 : 1);
+  for (const bx of [-7.2, 7.2]) {
+    const g = ctx.createRadialGradient(bx - 2, -3, 1, bx, 0, 10);
+    g.addColorStop(0, '#fbe3a6'); g.addColorStop(0.55, '#ebb35c'); g.addColorStop(1, '#cf8a36');
+    ctx.fillStyle = g; ctx.strokeStyle = '#94601c'; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.ellipse(bx, 0.5, 8.6, 7.4, 0, 0, 7); ctx.fill(); ctx.stroke();                 // the roll
+    ctx.fillStyle = 'rgba(180,108,34,.55)'; ctx.beginPath(); ctx.ellipse(bx + 1, -2.5, 5.2, 2.6, 0, 0, 7); ctx.fill();   // golden baked top
+    ctx.fillStyle = 'rgba(255,248,225,.85)'; for (const [dx, dy] of [[-3, 2.5], [2, 3.5], [-1, -5.2], [3.5, -0.5]]) { ctx.beginPath(); ctx.arc(bx + dx, dy, 0.9, 0, 7); ctx.fill(); }   // flour dust
+  }
+  ctx.strokeStyle = '#94601c'; ctx.lineWidth = lw * 0.8; ctx.beginPath(); ctx.moveTo(0, -6.5); ctx.quadraticCurveTo(-1, 0, 0, 7); ctx.stroke();   // where the two rolls join
+  ctx.restore();
+}
+
+function drawGomuFruit(x, y, pulse) {            // Gomu Gomu no Mi: round violet fruit covered in curly S swirls, stem on top
+  ctx.save(); ctx.translate(x, y + 2); ctx.scale(pulse, pulse);
+  const glow = ctx.createRadialGradient(0, 0, 8, 0, 0, 22);
+  glow.addColorStop(0, 'rgba(210,170,255,.55)'); glow.addColorStop(1, 'rgba(210,170,255,0)');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(0, 0, 22, 0, 7); ctx.fill();
+  const body = ctx.createRadialGradient(-4, -5, 2, 0, 0, 13);                                         // violet sphere
+  body.addColorStop(0, '#b583ea'); body.addColorStop(0.6, '#8a4fcf'); body.addColorStop(1, '#5a2a98');
+  ctx.fillStyle = body; ctx.strokeStyle = '#34175f'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(0, 0, 11.5, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.beginPath(); ctx.arc(0, 0, 11, 0, 7); ctx.clip();                                    // narutomaki-style spirals, cropped by the fruit's edge
+  ctx.strokeStyle = '#34175f'; ctx.lineWidth = 1.3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';     // same colour as the fruit's outline
+  for (const [sx, sy, R, turns, dir, rot] of [[-3.5, 1, 7, 2.1, 1, 0.4], [6.5, -5.5, 3.8, 1.6, -1, 2.0], [5.5, 6.5, 4, 1.7, 1, 4.0], [-7.5, -7, 3.6, 1.5, -1, 1.0], [-1.5, 10, 3.2, 1.5, 1, 0]]) {
+    ctx.beginPath();
+    for (let i = 0; i <= 40; i++) {
+      const th = i / 40 * turns * Math.PI * 2, rad = R * th / (turns * Math.PI * 2);
+      const px = sx + Math.cos(dir * th + rot) * rad, py = sy + Math.sin(dir * th + rot) * rad;
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(-5, -6.5, 3, 1.7, -0.7, 0, 7); ctx.fill();   // shine
+  ctx.strokeStyle = '#6e8b2f'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';                             // stem sprouting from the top
+  ctx.beginPath(); ctx.moveTo(0, -10.5); ctx.quadraticCurveTo(0.5, -15, 3.5, -16); ctx.stroke();
+  ctx.fillStyle = '#7fa83a'; ctx.beginPath(); ctx.ellipse(5.5, -14.5, 3.2, 1.6, -0.5, 0, 7); ctx.fill();   // little sprout leaf
+  ctx.restore();
+}
+
+function drawFood() {
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const k = food[r][c]; if (!k) continue;
+    const x = center(c), y = center(r);
+    if (k === 1) drawLadiPav(x, y, 0.56, (c + r) % 2 ? -0.35 : 0.3);                                       // the pellets
+    else drawGomuFruit(x, y, 1 + Math.sin(t / 8) * 0.1);                                                  // the power-up
+  }
+}
+
+let groundLayer;
+function buildGround() {                       // grass with dirt village paths on every open tile
+  groundLayer = document.createElement('canvas'); groundLayer.width = Math.round(W * RSX); groundLayer.height = Math.round(H * RSY);
+  const g = groundLayer.getContext('2d'); g.scale(RSX, RSY);
+  let seed = 11; const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#6ea653'); gr.addColorStop(1, '#4d853d');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.lineWidth = 1.2;
+  for (let k = 0; k < 700; k++) {
+    g.strokeStyle = rand() > 0.5 ? '#3f7634' : '#8cc468';
+    const x = rand() * W, y = rand() * H; g.beginPath(); g.moveTo(x, y); g.lineTo(x + rand() * 4 - 2, y - 3 - rand() * 3); g.stroke();
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (MAP[r][c] === '#') continue;
+    const x = c * T, y = r * T;
+    g.fillStyle = '#c9ab78'; g.fillRect(x, y, T, T);
+    g.fillStyle = '#d6bb8a'; for (let k = 0; k < 4; k++) g.fillRect(x + rand() * (T - 6), y + rand() * (T - 4), 6, 3);
+    g.fillStyle = '#a98b5c'; for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(x + rand() * T, y + rand() * T, 1 + rand(), 0, 7); g.fill(); }
+    g.fillStyle = '#9b7e4f';                                    // soft edge where the path meets a building
+    const wall = (dc, dr) => r + dr < 0 || r + dr >= ROWS || c + dc < 0 || c + dc >= COLS ? false : MAP[r + dr][c + dc] === '#';
+    if (wall(0, -1)) g.fillRect(x, y, T, 3);
+    if (wall(0, 1)) g.fillRect(x, y + T - 3, T, 3);
+    if (wall(-1, 0)) g.fillRect(x, y, 3, T);
+    if (wall(1, 0)) g.fillRect(x + T - 3, y, 3, T);
+  }
+}
+function drawGround() { if (!groundLayer) buildGround(); ctx.drawImage(groundLayer, 0, 0, W, H); }
+// ---------- bonus food sprites ----------
+function drawBonusFood(kind, x, y, k) {           // 0 Pav Bhaji, 1 Chili Cheese Toast, 2 GC Burrito, 3 Napoleon Cake
+  ctx.save(); ctx.translate(x, y); ctx.scale(k, k); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (kind === 0) {                                // Pav Bhaji: steel bowl of red-orange bhaji with butter, two buttered pav buns
+    ctx.translate(-2, 0);
+    ctx.fillStyle = '#c9cfd6'; ctx.strokeStyle = '#6b727a'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.ellipse(-3, 3, 11.5, 9, 0, 0, 7); ctx.fill(); ctx.stroke();                              // bowl
+    ctx.fillStyle = '#d4501c'; ctx.beginPath(); ctx.ellipse(-3, 1.5, 9.2, 6.4, 0, 0, 7); ctx.fill();               // bhaji
+    ctx.fillStyle = '#ea7a34'; ctx.beginPath(); ctx.ellipse(-5, -0.5, 5.5, 3, -0.3, 0, 7); ctx.fill();
+    ctx.fillStyle = '#7a2a0e'; for (const [px, py] of [[1, 3], [-7, 4], [-2, 5], [3, 0]]) { ctx.beginPath(); ctx.arc(px, py, 0.9, 0, 7); ctx.fill(); }
+    ctx.fillStyle = '#4caf50'; for (const [px, py] of [[-8, 1], [2, 4], [-4, 4.5], [4, -1.5]]) { ctx.beginPath(); ctx.arc(px, py, 1, 0, 7); ctx.fill(); }   // peas / coriander
+    ctx.fillStyle = '#ffe680'; ctx.strokeStyle = '#d9b84a'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.roundRect(-6.5, -2.5, 5.5, 3.6, 1); ctx.fill(); ctx.stroke();   // butter
+    for (const [px, py] of [[11, 7], [10, -0.5]]) {                                                                                                 // pav buns
+      ctx.fillStyle = '#e6b265'; ctx.strokeStyle = '#a8742a'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.ellipse(px, py, 6.2, 4.6, 0.15, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = '#a8742a'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(px - 4, py); ctx.lineTo(px + 4, py + 0.4); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,240,200,.7)'; ctx.beginPath(); ctx.ellipse(px - 2, py - 2, 2.4, 1, -0.3, 0, 7); ctx.fill();
+    }
+  } else if (kind === 1) {                         // Chili Cheese Toast: toast with melted cheese, green chilies, red flakes
+    ctx.fillStyle = '#e0b46a'; ctx.strokeStyle = '#8a5a1f'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-10, 11); ctx.lineTo(-10, -2); ctx.bezierCurveTo(-15, -4, -13, -12, -6, -11); ctx.bezierCurveTo(-3, -14.5, 3, -14.5, 6, -11); ctx.bezierCurveTo(13, -12, 15, -4, 10, -2); ctx.lineTo(10, 11); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffcb3a'; ctx.beginPath(); ctx.moveTo(-8, 9.5); ctx.lineTo(-8, -1); ctx.bezierCurveTo(-12, -3, -10, -9.5, -5, -9); ctx.bezierCurveTo(-3, -12, 3, -12, 5, -9); ctx.bezierCurveTo(10, -9.5, 12, -3, 8, -1); ctx.lineTo(8, 9.5);
+    ctx.bezierCurveTo(5, 12, 2, 8.5, 0, 11, ); ctx.bezierCurveTo(-3, 8.5, -6, 12.5, -8, 9.5); ctx.fill();                                   // melty cheese with drips
+    ctx.fillStyle = 'rgba(255,240,150,.7)'; ctx.beginPath(); ctx.ellipse(-3, -4, 4, 2, -0.3, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#2e9b3e'; ctx.lineWidth = 1.7; for (const [px, py] of [[-4, 0], [3, -5], [4, 4], [-3, 6]]) { ctx.beginPath(); ctx.arc(px, py, 2.1, 0, 7); ctx.stroke(); }   // green chili rings
+    ctx.fillStyle = '#d6301c'; for (const [px, py] of [[-1, 2], [6, 0], [-6, -4], [1, 7], [0, -7], [7, 7]]) { ctx.beginPath(); ctx.arc(px, py, 0.9, 0, 7); ctx.fill(); }  // chili flakes
+    ctx.fillStyle = '#fff6df'; for (const [px, py] of [[-6, 3], [5, 1], [1, -2]]) { ctx.beginPath(); ctx.ellipse(px, py, 1.5, 0.8, 0.5, 0, 7); ctx.fill(); }          // onion bits
+  } else if (kind === 2) {                         // GC Burrito: grilled tortilla, open end showing the cheese, purple wrapper
+    ctx.save(); ctx.rotate(-0.25);
+    ctx.fillStyle = '#efd9a8'; ctx.strokeStyle = '#a8803a'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(-14, -7.5, 27, 15, 7.5); ctx.fill(); ctx.stroke();                                                       // tortilla
+    ctx.strokeStyle = '#8a5a2a'; ctx.lineWidth = 1.7; for (let g = 0; g < 4; g++) { ctx.beginPath(); ctx.moveTo(-7 + g * 5.2, -6.5); ctx.lineTo(-3 + g * 5.2, 6.5); ctx.stroke(); }   // grill marks
+    ctx.fillStyle = '#7b3fa8'; ctx.strokeStyle = '#4e2272'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(-14, 1); ctx.lineTo(-3, 0); ctx.lineTo(-3, 8.5); ctx.lineTo(-10, 8.5); ctx.quadraticCurveTo(-14, 8, -14, 1); ctx.fill(); ctx.stroke();   // paper wrap
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-8.5, 5, 1.8, 0, 7); ctx.fill();
+    ctx.fillStyle = '#efd9a8'; ctx.strokeStyle = '#a8803a'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(13, 0, 3.6, 7.2, 0, 0, 7); ctx.fill(); ctx.stroke();   // open end
+    ctx.fillStyle = '#e0702a'; ctx.beginPath(); ctx.ellipse(13.4, 0, 2.2, 5.2, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#ffd54a'; ctx.beginPath(); ctx.ellipse(13.6, -1.2, 1.5, 2.6, 0, 0, 7); ctx.fill();                                      // melted cheese
+    ctx.restore();
+  } else {                                         // Napoleon Cake slice: thin pastry layers with custard cream, golden crumb coat
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(1, 11.5, 16, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f4f4f0'; ctx.strokeStyle = '#b9b9b2'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(1, 10.5, 15.5, 3.4, 0, 0, 7); ctx.fill(); ctx.stroke();   // plate
+    ctx.strokeStyle = '#8a5a1f'; ctx.lineWidth = 1.3;
+    ctx.fillStyle = '#c98a3c'; ctx.beginPath(); ctx.moveTo(9, -1); ctx.lineTo(15, -7); ctx.lineTo(15, 4); ctx.lineTo(9, 10); ctx.closePath(); ctx.fill(); ctx.stroke();   // right side
+    ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.moveTo(-11, -1); ctx.lineTo(-5, -7); ctx.lineTo(15, -7); ctx.lineTo(9, -1); ctx.closePath(); ctx.fill(); ctx.stroke();      // powdered-sugar top
+    for (const [px, py, c] of [[-4, -4, '#3b4cab'], [2, -5, '#d81b5a'], [8, -3.4, '#e5384f'], [-8, -2.4, '#33173f'], [11, -5.4, '#3b4cab'], [4, -2.2, '#d81b5a']]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(px, py, 1.7, 0, 7); ctx.fill(); }   // berries
+    for (let i = 0; i < 8; i++) {                                                                                                                                    // front face: pastry + cream layers
+      ctx.fillStyle = i % 2 ? '#fff0c2' : '#d9a050'; ctx.fillRect(-11, -1 + i * 1.375, 20, 1.4);
+    }
+    ctx.strokeRect(-11, -1, 20, 11);
+  }
+  ctx.restore();
+}
+function drawBonus() {
+  if (!bonus) return;
+  if (bonus.life < 120 && Math.floor(bonus.life / 8) % 2) return;                     // blink as it is about to vanish
+  const x = center(bonus.c), y = center(bonus.r) + Math.sin(t / 9) * 2;
+  const glow = ctx.createRadialGradient(x, y, 4, x, y, 24); glow.addColorStop(0, 'rgba(255,240,170,.7)'); glow.addColorStop(1, 'rgba(255,240,170,0)');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(x, y, 24, 0, 7); ctx.fill();
+  drawBonusFood(bonus.kind, x, y, 1.35);
+}
+
+// ---------- the Straw Hat crew who engage a Knight (simplified chibi sprites) ----------
+function drawCrew(who, ph) {                       // faces right; feet at y=16
+  const SKIN = '#f2c9a0', sw = Math.sin(ph) * 2, ay = -1 + sw * 0.3;
+  const c = [
+    { skin: SKIN, shirt: '#f4f4f0', pants: '#1c1c22', hair: '#4caf50' },              // Zoro
+    { skin: SKIN, shirt: '#ffb347', pants: '#3a6fb5', hair: '#f08a24' },              // Nami
+    { skin: SKIN, shirt: '#c9a24a', pants: '#8a6a35', hair: '#1b1b1b' },              // Usopp
+    { skin: SKIN, shirt: '#1b1b24', pants: '#1b1b24', hair: '#f2d16b' },              // Sanji
+    { skin: SKIN, shirt: '#8e44ad', pants: '#3b2a5a', hair: '#1a1a1a' },              // Robin
+    { skin: SKIN, shirt: SKIN,      pants: '#1f78c8', hair: '#35a0e0' },              // Franky
+    { skin: '#f7f5ee', shirt: '#1b1b24', pants: '#1b1b24', hair: '#111' },            // Brook
+    { skin: '#4a86c8', shirt: '#2a3f6b', pants: '#2a3f6b', hair: '#1b1b1b' },         // Jinbe
+  ][who];
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(0, 16, 11, 3, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = c.pants; ctx.fillRect(-5 + sw, 8, 4.5, 7); ctx.fillRect(0.5 - sw, 8, 4.5, 7);               // legs
+  if (who === 3) ctx.fillRect(5, 5, 10, 4.5);                                                                // Sanji's kick
+  ctx.fillStyle = '#2b1d12'; ctx.fillRect(-6 + sw, 14, 6, 2.5); ctx.fillRect(0 - sw, 14, 6, 2.5);
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1;
+  ctx.fillStyle = c.shirt; ctx.beginPath(); ctx.roundRect(-7, -5, 14, 14, 3); ctx.fill(); ctx.stroke();      // body
+  ctx.fillRect(-10, -3 - sw * 0.3, 3, 8);                                                                    // back arm
+  if (who === 0) { ctx.fillStyle = '#2e7d32'; ctx.fillRect(-7, 5, 14, 3); ctx.fillStyle = '#d4a737'; ctx.fillRect(-9, 4, 2, 7); ctx.fillRect(-11, 4, 2, 7); }   // haramaki + hip swords
+  if (who === 3) { ctx.fillStyle = '#f4f4f0'; ctx.fillRect(-2.5, -4, 5, 9); ctx.fillStyle = '#1e5aa8'; ctx.fillRect(-0.8, -3, 1.6, 8); }                       // shirt + tie
+  if (who === 6) { ctx.fillStyle = '#f4f4f0'; ctx.fillRect(-2.5, -4, 5, 9); ctx.fillStyle = '#d6457a'; ctx.fillRect(-0.8, -3, 1.6, 8); }
+  if (who === 5) { ctx.fillStyle = '#c0392b'; ctx.fillRect(-1, -2, 2, 2); }                                  // star on the chest
+  if (who === 7) { ctx.fillStyle = '#e8e2c4'; ctx.fillRect(-7, 4, 14, 2.5); }                                // sash
+  if (who === 5) {                                                                                           // Franky: "SUPER!" arm up
+    ctx.strokeStyle = SKIN; ctx.lineWidth = 3.4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(6, -3); ctx.lineTo(13, -16); ctx.stroke();
+    ctx.fillStyle = SKIN; ctx.beginPath(); ctx.arc(13.5, -17, 2.7, 0, 7); ctx.fill();
+  } else if (who === 4) {                                                                                    // Robin: crossed arms
+    ctx.strokeStyle = SKIN; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-7, -1); ctx.lineTo(6, 3); ctx.moveTo(6, -1); ctx.lineTo(-7, 3); ctx.stroke();
+  } else {
+    ctx.fillStyle = c.shirt; ctx.fillRect(7, ay, 8, 3.5);
+    ctx.fillStyle = c.skin === '#4a86c8' ? c.skin : SKIN; ctx.beginPath(); ctx.arc(15.5, ay + 1.8, who === 7 ? 2.8 : 2, 0, 7); ctx.fill();
+  }
+  // props held out front
+  if (who === 0) { ctx.fillStyle = '#e6edf2'; ctx.strokeStyle = '#7d8a96'; ctx.lineWidth = 1; ctx.beginPath(); ctx.rect(17, ay + 0.2, 15, 2); ctx.fill(); ctx.stroke(); ctx.fillStyle = '#d4a737'; ctx.fillRect(15.5, ay - 2, 2, 7); }
+  if (who === 1) { ctx.fillStyle = '#8d6e63'; ctx.fillRect(14.6, -13, 2, 29); ctx.fillStyle = '#2e86de'; ctx.beginPath(); ctx.arc(15.6, -13, 2.6, 0, 7); ctx.fill(); }
+  if (who === 2) { ctx.strokeStyle = '#6b4423'; ctx.lineWidth = 1.8; ctx.beginPath(); ctx.moveTo(15.5, ay + 2); ctx.lineTo(17, ay - 6); ctx.moveTo(17, ay - 6); ctx.lineTo(14, ay - 10); ctx.moveTo(17, ay - 6); ctx.lineTo(20.5, ay - 10); ctx.stroke(); }
+  if (who === 6) { ctx.fillStyle = '#c9c9d6'; ctx.fillRect(15, -2, 1.6, 20); ctx.fillStyle = '#222'; ctx.fillRect(14, -3, 3.6, 3); }
+  // head
+  ctx.fillStyle = c.skin; ctx.beginPath(); ctx.arc(0, -11, 7, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.stroke();
+  const cap = col => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, -12, 7.6, Math.PI * 1.02, Math.PI * 1.98); ctx.fill(); };
+  const eyes = () => { ctx.fillStyle = '#1b1b1b'; ctx.fillRect(2.4, -10.5, 1.8, 2.4); ctx.fillRect(-2.8, -10.5, 1.8, 2.4); };
+  if (who === 0) { cap(c.hair); ctx.fillStyle = c.hair; ctx.beginPath(); for (const dx of [-5, -1.5, 2, 5.5]) { ctx.moveTo(dx - 2, -17); ctx.lineTo(dx + 0.4, -22); ctx.lineTo(dx + 2.6, -17); } ctx.fill(); eyes(); }
+  if (who === 1) { cap(c.hair); ctx.fillRect(-8, -12, 3.5, 12); eyes(); }
+  if (who === 2) { ctx.fillStyle = c.hair; for (const [cx, cy] of [[-6, -15], [-3, -18], [1, -18.5], [5, -16.5], [7, -13]]) { ctx.beginPath(); ctx.arc(cx, cy, 3.4, 0, 7); ctx.fill(); }
+                   ctx.fillStyle = '#f5c542'; ctx.fillRect(-7, -16.5, 14, 2); ctx.beginPath(); ctx.arc(-2, -15.5, 2.3, 0, 7); ctx.arc(3, -15.5, 2.3, 0, 7); ctx.fill();   // goggles
+                   ctx.fillStyle = SKIN; ctx.beginPath(); ctx.moveTo(5, -12); ctx.lineTo(16, -9); ctx.lineTo(5, -8); ctx.closePath(); ctx.fill(); ctx.stroke(); eyes(); }   // long nose
+  if (who === 3) { cap(c.hair); ctx.fillStyle = c.hair; ctx.fillRect(-1, -12, 9, 4.5); ctx.fillStyle = '#1b1b1b'; ctx.fillRect(-2.8, -10.5, 1.8, 2.4);
+                   ctx.fillStyle = '#f4f4f0'; ctx.fillRect(6, -7.8, 6, 1.4); ctx.fillStyle = '#ff7a2a'; ctx.fillRect(12, -7.8, 1.4, 1.4); }                  // hair over one eye + cigarette
+  if (who === 4) { cap(c.hair); ctx.fillRect(-8, -12, 3.5, 13); eyes(); }
+  if (who === 5) { ctx.fillStyle = c.hair; ctx.beginPath(); ctx.ellipse(2, -19, 9, 5.5, 0, 0, 7); ctx.fill(); cap(c.hair); ctx.fillStyle = '#111'; ctx.fillRect(-4.5, -12.8, 12, 3.2); }
+  if (who === 6) { ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(0, -13, 9.5, Math.PI * 1.0, Math.PI * 2.0); ctx.fill();
+                   ctx.beginPath(); ctx.arc(-2.7, -11.5, 1.7, 0, 7); ctx.arc(3, -11.5, 1.7, 0, 7); ctx.fill(); ctx.fillRect(0, -9, 1.2, 1.8);
+                   ctx.strokeStyle = '#111'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-3.5, -6.5); ctx.lineTo(3.5, -6.5); ctx.stroke(); }
+  if (who === 7) { cap(c.hair); eyes(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-3.5, -6.8); ctx.lineTo(-1.5, -5.4); ctx.lineTo(0, -6.8); ctx.lineTo(1.5, -5.4); ctx.lineTo(3.5, -6.8); ctx.stroke(); }
+}
+
+// A Knight held by a Straw Hat: the crew member pops in beside it, steel clashes between them, a ring shows the time left.
+function drawEngaged(m) {
+  const age = ENGAGE_FRAMES - m.hold, left = m.hold;
+  const pop = age < 12 ? age / 12 : left < 14 ? left / 14 : 1;                          // quick pop in, fade/shrink out
+  const sx = m.holdLeft ? -1 : 1, cx = m.x + sx * 26, cy = m.y;                         // Straw Hat stands on the far side from Luffy
+  ctx.save();
+  if (age < 10) { ctx.fillStyle = `rgba(255,255,255,${0.7 * (1 - age / 10)})`; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(cx + Math.cos(k * 1.6) * 8, cy + Math.sin(k * 1.6) * 8 - 4, 7 * (1 - age / 14), 0, 7); ctx.fill(); } }   // poof
+  ctx.globalAlpha = Math.min(1, pop * 1.2);
+  ctx.translate(cx, cy + (1 - pop) * 6); ctx.scale(-sx * pop, pop);                      // face the Knight
+  drawCrew(m.holdWho, t / 5);
+  ctx.restore();
+  const mx = m.x + sx * 13, my = m.y - 2;                                                // clash sparks between them
+  ctx.save(); ctx.translate(mx, my); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+  for (let k = 0; k < 5; k++) { const a = t / 4 + k * 1.26, r1 = 3 + (t + k * 3) % 5, r2 = r1 + 4; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t / 2 + k); ctx.beginPath(); ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1); ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2); ctx.stroke(); }
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = 'rgba(255,224,102,.95)'; ctx.lineWidth = 3; ctx.lineCap = 'round';                  // 5-second ring
+  ctx.beginPath(); ctx.arc(m.x, m.y - 4, 21, -Math.PI / 2, -Math.PI / 2 + (left / ENGAGE_FRAMES) * Math.PI * 2); ctx.stroke(); ctx.restore();
+}
+
+function drawPowerFx() {
+  if (speedBoost > 0 && (ship.dx || ship.dy)) {                              // Franky: speed lines trailing behind Luffy
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    for (let k = 0; k < 4; k++) {
+      const off = (k - 1.5) * 7, len = 12 + ((t + k * 5) % 10);
+      const bx = ship.x - ship.dx * 14 + (ship.dy ? off : 0), by = ship.y - ship.dy * 14 + (ship.dx ? off : 0);
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx - ship.dx * len, by - ship.dy * len); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (shield > 0 && !(shield < 90 && Math.floor(shield / 8) % 2)) {          // Jinbe: water bubble around Luffy
+    ctx.save(); const g = ctx.createRadialGradient(ship.x - 6, ship.y - 8, 4, ship.x, ship.y, 24);
+    g.addColorStop(0, 'rgba(190,235,255,.45)'); g.addColorStop(1, 'rgba(70,150,230,.35)');
+    ctx.fillStyle = g; ctx.strokeStyle = 'rgba(200,240,255,.95)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(ship.x, ship.y, 23, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.beginPath(); ctx.arc(ship.x, ship.y, 18, Math.PI * 1.15, Math.PI * 1.45); ctx.stroke(); ctx.restore();
+  }
+  if (cameo) {                                                               // the summoned Straw Hat strikes a pose beside Luffy
+    const age = 90 - cameo.life, pop = age < 10 ? age / 10 : cameo.life < 14 ? cameo.life / 14 : 1;
+    ctx.save(); ctx.globalAlpha = Math.min(1, pop * 1.2); ctx.translate(cameo.x, cameo.y + (1 - pop) * 8); ctx.scale((cameo.left ? -1 : 1) * pop, pop);
+    drawCrew(cameo.who, t / 5); ctx.restore();
+    if (age < 10) { ctx.save(); ctx.fillStyle = `rgba(255,255,255,${0.7 * (1 - age / 10)})`; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.arc(cameo.x + Math.cos(k * 1.6) * 9, cameo.y + Math.sin(k * 1.6) * 9 - 4, 7 * (1 - age / 14), 0, 7); ctx.fill(); } ctx.restore(); }
+  }
+}
+
+function draw() {
+  ctx.setTransform(RSX, 0, 0, RSY, 0, 0); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.save();
+  if (shake) ctx.translate(rnd(-4, 4), rnd(-4, 4));
+  drawGround();
+  drawWalls();
+  drawMotes();
+  drawFood();
+  drawBonus();
+  for (const m of marines) {
+    const flash = m.scared && fright < 120 && Math.floor(fright / 10) % 2;
+    drawShip(m.x + (m.hold > 0 ? Math.sin(t * 1.9) * 1.2 : 0), m.y, true, m.hold > 0 ? m.holdLeft : m.dx < 0, m.scared && !flash, m.i);
+    ctx.textAlign = 'center';
+    if (m.scared) { ctx.font = '14px serif'; ctx.fillText('😨', m.x, m.y - 24); }       // name tag, or a scared face while frightened
+    else { ctx.font = 'bold 10px Georgia'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(20,20,20,.85)'; ctx.fillStyle = '#fff';
+           ctx.strokeText(KNIGHTS[m.i], m.x, m.y - 24); ctx.fillText(KNIGHTS[m.i], m.x, m.y - 24); }
+    const icons = (m.stun > 0 ? '⚡' : '') + (slow > 0 ? '🌱' : '') + (confuse > 0 ? '🎵' : '');                     // power status above the knight
+    if (icons) { ctx.font = '13px serif'; ctx.textAlign = 'center'; ctx.fillText(icons, m.x + 17, m.y - 24); }
+    if (m.stun > 0) {                                        // lightning crackling over a stunned knight
+      ctx.save(); ctx.strokeStyle = `rgba(255,236,120,${0.6 + 0.4 * Math.sin(t)})`; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      for (let k = 0; k < 2; k++) { const ox = (k - 0.5) * 16 + Math.sin(t / 2 + k) * 2; ctx.beginPath(); ctx.moveTo(m.x + ox, m.y - 30); ctx.lineTo(m.x + ox - 4, m.y - 19); ctx.lineTo(m.x + ox + 3, m.y - 14); ctx.lineTo(m.x + ox - 2, m.y - 3); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+  for (const m of marines) if (m.hold > 0) drawEngaged(m);
+  if (!(mode === 'over' && !won)) {
+    if (sinking) drawKnockedOut();
+    else {
+      ctx.globalAlpha = inv > 0 && Math.floor(inv / 6) % 2 ? 0.35 : 1;   // blink while invulnerable
+      drawShip(ship.x, ship.y + Math.sin(t / 12) * 1.2, false, ship.left);
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (mode !== 'over' || won) drawPowerFx();
+  ctx.font = 'bold 18px Georgia'; ctx.textAlign = 'center'; ctx.lineWidth = 3;
+  for (const f of floats) {
+    ctx.strokeStyle = '#2b1a0a'; ctx.fillStyle = '#ffe066';
+    ctx.strokeText(f.text, f.x, f.y); ctx.fillText(f.text, f.x, f.y);
+  }
+  if (flashFx > 0) { ctx.fillStyle = `rgba(255,255,255,${flashFx / 10 * 0.6})`; ctx.fillRect(-10, -10, W + 20, H + 20); }
+  ctx.restore();
+}
+
+// Fixed 60Hz timestep so speeds and timers are the same on 60/120/144Hz displays.
+let last = 0, acc = 0;
+function loop(ts) {
+  document.body.dataset.mode = mode;
+  if ((window.devicePixelRatio || 1) !== lastDpr) fit();
+  acc += Math.min(100, ts - (last || ts)); last = ts;
+  while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Shown on the lose screen, one at random. These are real lines, taken word for word from fan quote collections
+// (the One Piece Wiki blocked my lookups), so spelling/punctuation can differ slightly between official translations.
+// Where a source gave an episode or chapter it is noted. Each entry is [quote, who, personal message shown under it, group].
+// Group 'funny' quotes show when you lose; 'inspire' quotes show when you win. Each screen scrolls only through its own group.
+const QUOTES = [
+  // Inspirational
+  ["If I give up now, I'm going to regret it.", 'Luffy', "Believe in yourself my blueberry, you are capable of more than you think. You've come so far, lil kamyu would be so amazed <3", 'inspire'],                                                    // Ep. 881, to Ivankov (quotetheanime.com, graciousquotes.com)
+  ["When do you think people die? When they are shot through the heart by the bullet of a pistol? No. When they are ravaged by an incurable disease? No. When they drink a soup made from a poisonous mushroom!? No! It's when… they are forgotten.", 'Dr. Hiriluk', "Don't ever worry about people liking or hating you, pyaru. All the right people really care about you and nothing else matters.", 'inspire'],   // Ch. 145 (Goodreads; myanimethoughts.com opens the same way)
+  ['No matter how deep the night, it always turns to day, eventually.', 'Brook', "Even if you stumble in your routine, grades or whatever else, don't worry, pick yourself up and move on, my chickpea. You are doing great and I can't wait to see you become an excellent physician with my own eyes—wait, I have no eyes, Yohohohoo!", 'inspire'],                            // graciousquotes.com, Ranker's Brook list
+  // Funny
+  ["Of course it was fake! I can't lift five tons! I quit after five pounds!", 'Usopp', "If you have to, fake it till you make it babygirl!! ;)", 'funny'],                    // after his "5-ton" hammer breaks (Ranker's Usopp list, myanimethoughts.com)
+  ['It\'s not like ‘thanks’ are something I can eat.', 'Luffy', "Eat well pls ily", 'funny'],                                              // graciousquotes.com and other quote lists
+  ['What happened??', 'Zoro', "Let the haters hate, if anyone judges or excludes you, just make this face hehe", 'funny'],                                                                              // custom line chosen by the game's author, not a verbatim Zoro quote (the canon scene is Sanji asking, Zoro answering "Nothing happened.")
+];
+// Square portraits on the lose screen. Each tries a list of file names (png, jpg, jpeg, webp) and shows a dashed
+// placeholder until one exists. Birthday person: images/birthday-<character>-<n>.png for that character's nth quote,
+// else images/birthday-<character>.png, else images/birthday.png.
+// Character: images/<character>-<n>.png for that character's nth quote, else images/<character>.png.
+const IMG_EXTS = ['png', 'jpg', 'jpeg', 'webp'];
+const slug = who => who.toLowerCase().replace(/^dr\.\s*/, '').replace(/[^a-z]/g, '');
+const imgCandidates = names => names.flatMap(n => IMG_EXTS.map(e => `images/${n}.${e}`));
+function nextPortraitImg(img) {                    // missing file: try the next candidate, then give up (placeholder stays)
+  const list = img.dataset.list.split('|'), i = +img.dataset.i + 1;
+  if (i < list.length) { img.dataset.i = i; img.src = list[i] + '?t=' + Date.now(); } else img.remove();
+}
+function portraitHtml(label, names, initial) {
+  const list = imgCandidates(names);
+  return `<div class="portrait" title="${label}"><span class="ph-initial">${initial}</span><span class="ph-hint">${list[0]}</span>`
+       + `<img alt="${label}" data-list="${list.join('|')}" data-i="0" src="${list[0]}?t=${Date.now()}" onerror="nextPortraitImg(this)"></div>`;
+}
+let cardNav = null;                                 // { i, kind, mode } while a quote card is on screen
+const lastPick = {};
+const quotePool = kind => QUOTES.map((q, i) => i).filter(i => QUOTES[i][3] === kind);
+function pickQuoteIndex(kind) {
+  const pool = quotePool(kind); let i;
+  do { i = pool[Math.floor(Math.random() * pool.length)]; } while (i === lastPick[kind] && pool.length > 1);
+  return (lastPick[kind] = i);
+}
+const escapeHtml = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// One quote card. kind = 'funny' (lose screen, with score + Try again) or 'inspire' (win screen, with Wahoo!!).
+// ◀ ▶ (or the arrow keys) scroll through that group's quotes.
+function renderQuoteCard(i, kind, mode) {
+  const end = $('end'), [quote, who, note] = QUOTES[i], sl = slug(who);
+  const pool = quotePool(kind), pos = pool.indexOf(i);
+  const nth = QUOTES.slice(0, i + 1).filter(q => q[1] === who).length;          // which of this character's quotes it is
+  cardNav = { i, kind, mode };
+  end.className = 'card' + (mode === 'win' ? ' win' : '');
+  end.innerHTML = `<div class="portraits">${portraitHtml('Birthday person', [`birthday-${sl}-${nth}`, `birthday-${sl}`, 'birthday'], '🎂')}${portraitHtml(who, [`${sl}-${nth}`, sl], who.replace(/^Dr\.\s*/, '')[0])}</div>
+    <p style="font-size:${quote.length > 110 ? '1.02rem' : '1.4rem'};font-style:italic;line-height:1.35;margin:4px 0 8px">“${quote}”</p>
+    <p style="margin:0 0 8px"><b>— ${who}</b></p>
+    ${note ? `<div class="note">${escapeHtml(note)}</div>` : ''}
+    <div class="qnav"><button class="qbtn" id="qprev" aria-label="Previous quote">◀</button><span>${pos + 1} / ${pool.length}</span><button class="qbtn" id="qnext" aria-label="Next quote">▶</button></div>
+    ${mode === 'lose' ? `<p style="margin:8px 0 0">Score: ${score}</p>` : ''}<button id="again">${mode === 'lose' ? 'Try again' : 'Wahoo!!'}</button>${muteBtnHtml()}`;
+  bindMute();
+  $('qprev').onclick = () => stepQuote(-1);
+  $('qnext').onclick = () => stepQuote(1);
+  $('again').onclick = start;
+}
+function stepQuote(d) {
+  if (!cardNav) return;
+  const pool = quotePool(cardNav.kind), pos = pool.indexOf(cardNav.i);
+  renderQuoteCard(pool[(pos + d + pool.length) % pool.length], cardNav.kind, cardNav.mode);
+}
+
+// ---------- win-screen birthday cake: blow out all 25 candles, and then the photos appear ----------
+let cakeTimers = [], cakeCandles = [], micStream = null, micRaf = 0, blowHoldTimer = 0, lastPuff = 0;
+const CAKE_H = 292;                                // cake drawing is 400 x 292
+function cakeBerry(type, x, y, k = 1) {            // the berries from Martha's Berry Napoleon
+  if (type === 0) return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})"><circle r="4.6" fill="#3b4cab" stroke="#262f78" stroke-width=".8"/><circle cy="-1.6" r="1.5" fill="#1e2358"/><circle cx="-1.6" cy="-1.8" r="1" fill="rgba(255,255,255,.55)"/></g>`;   // blueberry
+  if (type === 1) return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})" fill="#d81b5a" stroke="#8e0f3a" stroke-width=".5">${[[-2.6, -2], [2.6, -2], [0, -3.4], [-3.4, 1.4], [3.4, 1.4], [0, 1], [-1.4, 3.6], [1.4, 3.6]].map(([dx, dy]) => `<circle cx="${dx}" cy="${dy}" r="2.1"/>`).join('')}</g>`;   // raspberry
+  if (type === 2) return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})"><path d="M-5.5 -3.5 Q0 -6.5 5.5 -3.5 Q5 3 0 6.5 Q-5 3 -5.5 -3.5Z" fill="#e5384f" stroke="#a0182e" stroke-width=".8"/><path d="M-2.6 -2 Q0 -3.6 2.6 -2 Q2.2 1.4 0 3.4 Q-2.2 1.4 -2.6 -2Z" fill="#ffd7dc"/><path d="M-2.8 -6 l2.8 2 2.8 -2" stroke="#3f9b46" stroke-width="1.6" fill="none"/></g>`;   // strawberry half
+  return `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k})" fill="#33173f" stroke="#1a0a22" stroke-width=".5">${[[-2.6, -2], [2.6, -2], [0, -3.2], [-3.2, 1.6], [3.2, 1.6], [0, 1.2], [-1.4, 3.8], [1.4, 3.8]].map(([dx, dy]) => `<circle cx="${dx}" cy="${dy}" r="2.3"/><circle cx="${dx - .7}" cy="${dy - .8}" r=".7" fill="rgba(255,255,255,.4)" stroke="none"/>`).join('')}</g>`;   // blackberry
+}
+function cakeSvg() {
+  const CX = 200, TOP = 118, RX = 150, RY = 34, SIDE_RY = 26;
+  // --- the candles: 25 of them in three rows across the powdered-sugar top
+  const rows = [[102, 8, 104], [118, 9, 120], [134, 8, 104]], colors = ['#ff7aa8', '#7ad0ff', '#ffd45a', '#a98bff', '#7ee0a0'];
+  let k = 0, candles = '';
+  for (const [y, n, half] of rows) for (let i = 0; i < n; i++) {
+    const x = CX - half + (2 * half) * (n === 1 ? 0.5 : i / (n - 1)), c = colors[k % colors.length];
+    candles += `<g class="candle" data-i="${k}" data-x="${x.toFixed(1)}" data-y="${y - 22}">
+      <rect x="${(x - 3.2).toFixed(1)}" y="${y - 22}" width="6.4" height="22" rx="1.6" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width=".8"/>
+      <path d="M${(x - 3.2).toFixed(1)} ${y - 15} l6.4 -3 M${(x - 3.2).toFixed(1)} ${y - 9} l6.4 -3" stroke="rgba(255,255,255,.75)" stroke-width="1.4"/>
+      <circle class="glow" cx="${x.toFixed(1)}" cy="${y - 31}" r="10" fill="url(#cglow)"/>
+      <path class="flame" d="M${x.toFixed(1)} ${y - 22} c-4.2 -5 -3.4 -10 0 -15 c3.4 5 4.2 10 0 15z" fill="url(#cflame)"/>
+      <path class="smoke" d="M${x.toFixed(1)} ${y - 24} c-3 -5 3 -8 0 -13 c-2 -3 2 -5 0 -8" stroke="#aaa" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <rect x="${(x - 9).toFixed(1)}" y="${y - 40}" width="18" height="40" fill="transparent"/>
+    </g>`;
+    k++;
+  }
+  // --- the side: golden puff-pastry layers alternating with vanilla pastry cream (curved to follow the round cake)
+  const band = (yt, yb, fill, extra = '') => `<path d="M${CX - RX} ${yt} a${RX} ${SIDE_RY} 0 0 0 ${2 * RX} 0 L${CX + RX} ${yb} a${RX} ${SIDE_RY} 0 0 1 ${-2 * RX} 0Z" fill="${fill}" ${extra}/>`;
+  const curveY = (yEdge, x) => yEdge + SIDE_RY * Math.sqrt(Math.max(0, 1 - Math.pow((x - CX) / RX, 2)));
+  let layers = '', y = TOP; const creamBands = [];
+  for (let i = 0; i < 8; i++) {
+    layers += band(y, y + 9, 'url(#cpast)', 'stroke="#a8691f" stroke-width=".7"');
+    layers += `<path d="M${CX - RX} ${y + 4.5} a${RX} ${SIDE_RY} 0 0 0 ${2 * RX} 0" fill="none" stroke="#f6d78f" stroke-width="1.2" stroke-dasharray="7 6" stroke-dashoffset="${i * 3}" opacity=".9"/>`;       // flaky texture
+    layers += `<path d="M${CX - RX} ${y + 7.2} a${RX} ${SIDE_RY} 0 0 0 ${2 * RX} 0" fill="none" stroke="#b97a2a" stroke-width=".9" stroke-dasharray="3 9" stroke-dashoffset="${i * 5}" opacity=".75"/>`;
+    layers += band(y + 9, y + 14, '#fff3bf', 'stroke="#e6d08a" stroke-width=".6"');
+    creamBands.push(y + 11.5); y += 14;
+  }
+  layers += band(y, y + 8, 'url(#cpast)', 'stroke="#a8691f" stroke-width=".7"');
+  // berries squeezing out between the layers
+  const peek = [[1, 70, 1], [1, 270, 0], [3, 120, 0], [3, 210, 1], [3, 318, 3], [5, 92, 3], [5, 168, 2], [5, 296, 0], [6, 232, 1], [6, 130, 0]]
+    .map(([bi, x, t]) => cakeBerry(t, x, curveY(creamBands[bi], x), 0.78)).join('');
+  // --- the top: powdered sugar, then a ring of mixed berries
+  const berryRing = Array.from({ length: 18 }, (_, i) => { const a = (i / 18) * Math.PI * 2 + 0.2; return cakeBerry((i * 7 + 3) % 4, CX + RX * 0.9 * Math.cos(a), TOP + RY * 0.86 * Math.sin(a) + 1, 1); }).join('');
+  const sugar = Array.from({ length: 70 }, (_, i) => { const a = i * 2.399, rr = Math.sqrt((i + 1) / 70) * 0.93; return `<circle cx="${(CX + RX * rr * Math.cos(a)).toFixed(1)}" cy="${(TOP + RY * rr * Math.sin(a)).toFixed(1)}" r="${(0.5 + (i % 3) * 0.35).toFixed(2)}" fill="#fff"/>`; }).join('');
+  return `<svg id="cakesvg" viewBox="0 0 400 ${CAKE_H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Napoleon cake with 25 candles">
+    <defs>
+      <radialGradient id="cglow"><stop offset="0" stop-color="#ffe9a0" stop-opacity=".9"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>
+      <linearGradient id="cflame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff7a1a"/><stop offset=".55" stop-color="#ffc83a"/><stop offset="1" stop-color="#fff6c8"/></linearGradient>
+      <linearGradient id="cpast" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d89a40"/><stop offset=".45" stop-color="#f0c46c"/><stop offset="1" stop-color="#cf8f38"/></linearGradient>
+      <radialGradient id="ctopg" cx=".5" cy=".5" r=".6"><stop offset="0" stop-color="#ffffff"/><stop offset=".75" stop-color="#fff9ea"/><stop offset="1" stop-color="#f2d9a4"/></radialGradient>
+    </defs>
+    <ellipse cx="${CX}" cy="266" rx="190" ry="17" fill="#f4f4ee" stroke="#c8c8bd" stroke-width="2"/>
+    <ellipse cx="${CX}" cy="264" rx="172" ry="13" fill="#e9d9b0" opacity=".6"/>
+    ${layers}
+    ${peek}
+    <ellipse cx="${CX}" cy="${TOP}" rx="${RX}" ry="${RY}" fill="url(#ctopg)" stroke="#d9b877" stroke-width="2"/>
+    ${sugar}
+    ${berryRing}
+    ${candles}
+  </svg>`;
+}
+async function startMic(hint) {                     // optional: blowing into the mic puts candles out
+  try {
+    ensureAudio(); if (!audioCtx) throw new Error('no audio');
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const an = audioCtx.createAnalyser(); an.fftSize = 1024; audioCtx.createMediaStreamSource(micStream).connect(an);
+    const buf = new Float32Array(an.fftSize); let base = 0.01;
+    const tick = () => {
+      an.getFloatTimeDomainData(buf); let sum = 0; for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      const rms = Math.sqrt(sum / buf.length); base = base * 0.97 + Math.min(rms, 0.2) * 0.03;
+      if (rms > Math.max(0.06, base * 3.2)) blowRandom(1 + Math.floor((rms - 0.06) * 30));       // louder breath, more candles
+      micRaf = requestAnimationFrame(tick);
+    };
+    tick(); hint.textContent = '🎤 Listening... blow towards the mic!';
+  } catch (e) { hint.textContent = 'No microphone available: just tap or swipe over the candles instead.'; }
+}
+function stopMic() { cancelAnimationFrame(micRaf); if (micStream) micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+function litCandles() { return cakeCandles.filter(c => !c.out); }
+function snuff(c) {
+  if (c.out) return false; c.out = true; c.el.classList.add('out');
+  const left = litCandles().length, cnt = $('cakecount'); if (cnt) cnt.textContent = left ? `Candles left: ${left}` : 'All 25 out! 🎉';
+  if (performance.now() - lastPuff > 140) { lastPuff = performance.now(); sfxBlow(); }
+  if (!left) cakeDone();
+  return true;
+}
+function blowRandom(n) { const lit = litCandles(); for (let i = 0; i < n && lit.length; i++) snuff(lit.splice(Math.floor(Math.random() * lit.length), 1)[0]); }
+let cutReady = false, cutTrack = null, customPosterUrl = null;
+// Your own finished poster image: images/wanted-poster.png (or .jpg / .jpeg / .webp). If it exists it pops out of the cake
+// instead of the poster the game draws itself (which stays as a fallback so there is always something to show).
+async function findCustomPoster() {
+  customPosterUrl = null;
+  for (const ext of IMG_EXTS) { const u = `images/wanted-poster.${ext}`; if (await canLoad(u)) { customPosterUrl = u; break; } }
+}
+function cakeDone() {
+  stopMic(); clearInterval(blowHoldTimer);
+  sfxWish(); confettiBurst(34);
+  const hint = $('cakehint'); if (hint) hint.textContent = '';                 // the heading already says "Make a wish… ✨"
+  cakeTimers.push(setTimeout(() => {                      // after the wish: time to cut the cake
+    const h = $('cakehint'); if (!h) return;
+    h.textContent = 'Now cut the cake! Swipe down across it 🔪'; cutReady = true;
+    $('blowbtn').hidden = true; $('micbtn').hidden = true; $('cutbtn').hidden = false;
+  }, 2200));
+}
+function doCut(x) {                                        // knife goes through the cake, then the WANTED poster pops out
+  if (!cutReady) return; cutReady = false;
+  const svg = $('cakesvg'), ns = 'http://www.w3.org/2000/svg';
+  const slit = document.createElementNS(ns, 'rect');
+  slit.setAttribute('x', x - 1.5); slit.setAttribute('y', 126); slit.setAttribute('width', 3); slit.setAttribute('height', 0); slit.setAttribute('fill', '#fff7c8'); slit.setAttribute('rx', 1.5);
+  svg.appendChild(slit);
+  const t0 = performance.now();
+  (function grow(now) { const p = Math.min(1, (now - t0) / 260); slit.setAttribute('height', 128 * p); if (p < 1) requestAnimationFrame(grow); })(t0);
+  sfxCut(); $('cakehint').textContent = ''; $('cutbtn').hidden = true; shake = 6;
+  cakeTimers.push(setTimeout(popPoster, 520));
+}
+function animateNumber(el, to, ms) {
+  const t0 = performance.now();
+  (function tick(now) { const p = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(to * e).toLocaleString('en-US'); if (p < 1) requestAnimationFrame(tick); })(t0);
+}
+function removePoster() { document.querySelectorAll('#wposter, #postnext').forEach(e => e.remove()); }
+function popCustomPoster(url) {
+  const im = new Image();
+  im.onload = () => {
+    const ar = im.naturalWidth / im.naturalHeight, h = Math.min(innerHeight - 100, 640, (innerWidth * 0.92) / ar), w = h * ar;
+    $('overlay').insertAdjacentHTML('beforeend', `<div class="wposter wposter-img" id="wposter" style="width:${w.toFixed(0)}px;height:${h.toFixed(0)}px"><img alt="Wanted poster" src="${url}"></div><button id="postnext" class="postnext" hidden>Continue ➜</button>`);
+    sfxPoster(); confettiBurst(30);
+    $('postnext').onclick = () => { cakeTimers.forEach(clearTimeout); cakeTimers = []; removePoster(); showMemories(); };
+    cakeTimers.push(setTimeout(() => { const b = $('postnext'); if (b) b.hidden = false; }, 2600));
+  };
+  im.src = url + '?t=' + Date.now();
+}
+function popPoster() {
+  const end = $('end'); if (!end || !$('cakesvg')) return;
+  removePoster();
+  if (customPosterUrl) return popCustomPoster(customPosterUrl);          // your own poster picture
+  const bits = ['0%', '2.4%', '5%', '8%', '11%', '14%', '17.5%', '21%', '25%', '29%', '33%', '37%', '41%', '45%', '49%', '53%', '57%', '61%', '65%', '69%', '73%', '77%', '81%', '85%', '89%', '93%', '96%', '98.4%', '100%'];
+  const jag = () => (Math.random() * 1.6).toFixed(1) + '%';
+  const top = bits.map(p => `${p} ${jag()}`), right = [20, 40, 60, 80].map(p => `${(100 - Math.random() * 1.6).toFixed(1)}% ${p}%`);
+  const bottom = bits.slice().reverse().map(p => `${p} ${(100 - Math.random() * 1.6).toFixed(1)}%`), left = [80, 60, 40, 20].map(p => `${jag()} ${p}%`);
+  const clip = `polygon(${[...top, ...right, ...bottom, ...left].join(',')})`;
+  $('overlay').insertAdjacentHTML('beforeend', `<div class="wposter" id="wposter" style="clip-path:${clip}">
+      <div class="wp-nail l"></div><div class="wp-nail r"></div>
+      <div class="wp-head">WANTED</div>
+      <div class="wp-photo">${portraitHtml(PLAYER_NAME, ['wanted'], '📷')}</div>
+      <div class="wp-doa">DEAD OR ALIVE</div>
+      <div class="wp-name">${POSTER_NAME.toUpperCase()}</div>
+      <div class="wp-bounty"><span class="wp-b">฿</span><span id="wpnum">0</span><span class="wp-dash">-</span></div>
+      <div class="wp-foot">MARINE</div>
+    </div><button id="postnext" class="postnext" hidden>Continue ➜</button>`);
+  const pw = Math.max(170, Math.min(330, innerWidth * 0.88, (innerHeight - 90) / 1.5));         // poster width that fits the window (it is ~1.5x taller than wide)
+  $('wposter').style.setProperty('--u', (pw / 20).toFixed(2) + 'px');
+  sfxPoster(); confettiBurst(30);
+  animateNumber($('wpnum'), 2510101347, 2400);
+  $('postnext').onclick = () => { cakeTimers.forEach(clearTimeout); cakeTimers = []; removePoster(); showMemories(); };
+  cakeTimers.push(setTimeout(() => { const b = $('postnext'); if (b) b.hidden = false; }, 3000));
+}
+function showCake() {
+  findCustomPoster();
+  const end = $('end'); end.className = 'card cake win'; $('overlay').classList.add('win'); cardNav = null;
+  end.innerHTML = `<h2 class="memtitle">Make a wish… ✨</h2><div class="cakewrap" id="cakewrap">${cakeSvg()}</div>
+    <div class="cakecount" id="cakecount">Candles left: 25</div><div class="cakehint" id="cakehint">Tap or swipe across the candles to blow them out!</div>
+    <div class="cakebtns"><button id="blowbtn">💨 Hold to blow</button><button id="micbtn">🎤 Use the mic</button><button id="cutbtn" hidden>🔪 Cut the cake</button></div>${muteBtnHtml()}`;
+  bindMute();
+  cakeCandles = [...end.querySelectorAll('.candle')].map(el => ({ el, x: +el.dataset.x, y: +el.dataset.y, out: false }));
+  const svg = $('cakesvg');
+  // Swiping blows out every candle along the whole path between pointer positions (a fast flick can't jump over candles).
+  const toSvg = e => { const b = svg.getBoundingClientRect(); return { x: (e.clientX - b.left) * 400 / b.width, y: (e.clientY - b.top) * CAKE_H / b.height }; };
+  const distSeg = (c, p, q) => { const dx = q.x - p.x, dy = q.y - p.y, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((c.x - p.x) * dx + (c.y - p.y) * dy) / L)) : 0; return Math.hypot(c.x - (p.x + t * dx), c.y - (p.y + t * dy)); };
+  const sweep = (p, q, r) => cakeCandles.forEach(c => { if (!c.out && distSeg(c, p, q) < r) snuff(c); });
+  let lastPt = null;
+  cutReady = false; cutTrack = null;
+  svg.addEventListener('pointerdown', e => { lastPt = toSvg(e); if (cutReady) { cutTrack = { x: lastPt.x, y0: lastPt.y, y1: lastPt.y }; return; } sweep(lastPt, lastPt, 30); });
+  svg.addEventListener('pointermove', e => {
+    if (!(e.buttons || e.pointerType === 'touch')) { lastPt = null; return; }
+    const p = toSvg(e);
+    if (cutReady) {                                      // a downward swipe across the cake cuts it
+      if (cutTrack) { cutTrack.y0 = Math.min(cutTrack.y0, p.y); cutTrack.y1 = Math.max(cutTrack.y1, p.y); if (cutTrack.y1 - cutTrack.y0 > 45 && cutTrack.y1 > 120) doCut(Math.max(120, Math.min(280, p.x))); }
+      return;
+    }
+    sweep(lastPt || p, p, 30); lastPt = p;
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => svg.addEventListener(t, () => { lastPt = null; cutTrack = null; }));
+  $('cutbtn').onclick = () => doCut(200);
+  const blowBtn = $('blowbtn'), hold = () => { blowRandom(2); clearInterval(blowHoldTimer); blowHoldTimer = setInterval(() => blowRandom(2), 200); }, release = () => clearInterval(blowHoldTimer);
+  blowBtn.addEventListener('pointerdown', hold); blowBtn.addEventListener('pointerup', release); blowBtn.addEventListener('pointerleave', release);
+  blowBtn.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') blowRandom(3); });
+  $('micbtn').onclick = () => { $('micbtn').disabled = true; startMic($('cakehint')); };
+  sfxBirthdaySong();
+}
+
+// ---------- win-screen scrapbook: your photos drop onto a table one at a time ----------
+let memoryPhotos = null;
+const canLoad = url => new Promise(res => { const im = new Image(); im.onload = () => res(true); im.onerror = () => res(false); im.src = url + '?t=' + Date.now(); });
+async function getMemoryPhotos() {
+  // 1) images/memory-1 ... memory-8 (.png/.jpg/.jpeg/.webp): the photos you want in the scrapbook, in that order.
+  // 2) If there are none, it falls back to the photos named after the quote characters (luffy-1.png, zoro.png ...).
+  if (memoryPhotos) return memoryPhotos;
+  const firstExisting = async name => { for (const ext of IMG_EXTS) { const url = `images/${name}.${ext}`; if (await canLoad(url)) return url; } return null; };
+  let found = [];
+  for (let i = 1; i <= 8; i++) { const u = await firstExisting('memory-' + i); if (u) found.push(u); }
+  if (!found.length) {
+    const names = [];
+    QUOTES.forEach(([q, who], i) => { const sl = slug(who), nth = QUOTES.slice(0, i + 1).filter(x => x[1] === who).length; names.push(`${sl}-${nth}`, sl); });
+    for (const n of [...new Set(names)]) { const u = await firstExisting(n); if (u) found.push(u); }
+  }
+  return (memoryPhotos = found.slice(0, 8));
+}
+let memTimers = [];
+async function showMemories() {
+  removePoster();
+  cakeTimers.forEach(clearTimeout); cakeTimers = []; stopMic(); clearInterval(blowHoldTimer);
+  const end = $('end'); end.className = 'card memories win'; $('overlay').classList.add('win'); cardNav = null;
+  end.innerHTML = `<h2 class="memtitle">💞 Happy Birthday! 💞</h2><div class="membox" id="membox"><div class="memflash" id="memflash"></div></div><button id="memnext">Continue ➜</button>${muteBtnHtml()}`;
+  bindMute();
+  const go = () => { memTimers.forEach(clearTimeout); memTimers = []; renderQuoteCard(pickQuoteIndex('inspire'), 'inspire', 'win'); };
+  $('memnext').onclick = go;
+  const urls = await getMemoryPhotos();
+  if (!urls.length) return go();                      // no photos yet: straight on to the quote
+  const box = $('membox'), n = urls.length, caps = ['💞', '🥳', '🎂', '✨', '💖', '🎉', '🌸', '🎁'];
+  const cols = n <= 4 ? n : Math.ceil(n / 2), rows = n <= 4 ? 1 : 2, W_ = 21;
+  urls.forEach((u, i) => {
+    const row = rows === 1 ? 0 : (i < cols ? 0 : 1), col = rows === 1 ? i : (row === 0 ? i : i - cols), inRow = row === 0 ? cols : n - cols;
+    const g2 = (100 - inRow * W_) / (inRow + 1);
+    const el = document.createElement('div'); el.className = 'polaroid';
+    el.style.left = (g2 + col * (W_ + g2) + (Math.random() * 3 - 1.5)) + '%';
+    el.style.top = (rows === 1 ? 22 : row === 0 ? 5 : 50) + (Math.random() * 3 - 1.5) + '%';
+    el.style.setProperty('--r', (Math.random() * 14 - 7).toFixed(1) + 'deg');
+    el.innerHTML = `<img alt="" src="${u}?t=${Date.now()}"><div class="cap">${caps[i % caps.length]}</div>`;
+    box.appendChild(el);
+    memTimers.push(setTimeout(() => {                  // flash + click, then the photo drops in
+      const fl = $('memflash'); if (!fl) return; fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go');
+      sfxShutter(); el.classList.add('in');
+    }, 500 + i * 950));
+  });
+  memTimers.push(setTimeout(() => confettiBurst(36), 500 + n * 950 + 300));      // confetti once the last photo has landed
+}
+
+function finish(w) {
+  mode = 'over'; won = w;
+  musicOn(false); loopOn('drums', false);
+  if (w) sfxWin(); else sfxLose();
+  const end = $('end');
+  if (won) {
+    end.className = 'card poster win'; $('overlay').classList.add('win');
+    end.innerHTML = `<h2 style="font-size:1.7rem;letter-spacing:.1em">TREASURE FOUND!</h2><div style="font-size:4rem">🏴‍☠️💎</div>
+      <p style="margin:6px 0"><i>Dead or alive… but mostly alive, for pav bhaji.</i></p>
+      <p>🎂 <b>Happy Birthday My Love!</b> 🎂<br>The real treasure was you all along! Jkjkjk, there's a lil more</p>
+      <p>Score: ${score}</p>
+      <button id="qcont">Continue ➜</button>${muteBtnHtml()}`;
+  } else {
+    $('overlay').classList.remove('win'); renderQuoteCard(pickQuoteIndex('funny'), 'funny', 'lose');
+  }
+  $('overlay').classList.remove('hidden');
+  $('start').classList.add('hidden');
+  bindMute();
+  resultsSong(true, won ? 1800 : 400);
+  if (won) { cardNav = null; $('qcont').onclick = showCake; }          // poster -> cake with 25 candles -> photo scrapbook -> inspirational quote
+}
+
+// ---------- start-menu intro video ----------
+// Put a short video at videos/intro.mp4 (or intro.webm / intro.mov). It plays when the page opens and the start button
+// stays greyed out until it has played all the way through. If there is no usable video the button just unlocks.
+const VIDEO_FILES = ['videos/intro.mp4', 'videos/intro.webm', 'videos/intro.mov'];
+let videoDone = false, introPlay = () => {};
+function setupIntroVideo(files = VIDEO_FILES) {
+  const go = $('go');
+  document.querySelectorAll('#introbox').forEach(e => e.remove());
+  videoDone = false; go.disabled = true;
+  document.querySelector('#start .startwrap').insertAdjacentHTML('afterbegin', `<div class="introbox" id="introbox"><video id="intro" playsinline preload="auto" disablepictureinpicture></video>
+    <button class="vbtn vmute" id="vmute" hidden aria-label="Sound on or off"></button><button class="vbtn vplay" id="vplay" hidden>▶ Play</button><div class="vbar"><i id="vprog"></i></div></div>`);
+  const v = $('intro'), box = $('introbox'), mute = $('vmute'), big = $('vplay');
+  const unlock = () => { videoDone = true; go.disabled = false; mute.hidden = true; big.hidden = true; };
+  const missing = () => { box.className = 'introbox missing'; box.innerHTML = `<span>🎬<br><small>${files[0]}<br>(vertical, 9:16)</small></span>`; unlock(); };
+  let idx = -1;
+  const next = () => { idx++; if (idx >= files.length) return missing(); v.src = files[idx] + (files[idx].startsWith('blob:') ? '' : '?t=' + Date.now()); v.load(); };
+  const syncMute = () => { mute.textContent = v.muted ? '🔇 Tap for sound' : '🔊'; };
+  async function play() {
+    try { v.muted = false; await v.play(); mute.hidden = false; syncMute(); return; } catch (e) {}      // sound first...
+    try { v.muted = true; await v.play(); mute.hidden = false; syncMute(); return; } catch (e) {}       // ...browsers that block that allow muted
+    big.hidden = false;                                                                                  // ...and some need a tap
+  }
+  v.addEventListener('loadedmetadata', () => {                 // fit the box to the video's real shape (vertical 9:16, square or landscape)
+    const ar = v.videoWidth / v.videoHeight;
+    box.style.aspectRatio = String(ar);
+    if (ar >= 1) { box.style.width = 'min(100%, 300px)'; box.style.height = 'auto'; }
+    else { box.style.width = 'auto'; box.style.height = ''; }
+  });
+  v.addEventListener('error', next);
+  v.addEventListener('timeupdate', () => { if (v.duration) $('vprog').style.width = (100 * v.currentTime / v.duration) + '%'; });
+  v.addEventListener('ended', () => { $('vprog').style.width = '100%'; unlock(); });
+  introPlay = () => { play(); };                                // called from the gate's click, which is what lets the sound start
+  mute.onclick = () => { v.muted = !v.muted; syncMute(); };
+  big.onclick = () => { big.hidden = true; v.muted = false; v.play().then(() => { mute.hidden = false; syncMute(); }).catch(() => { v.muted = true; v.play().catch(() => unlock()); }); };
+  next();
+}
+
+
+function start() {
+  if (!videoDone) return;                        // the intro video must finish first
+  { const iv = $('intro'); if (iv) iv.pause(); }
+  $('overlay').classList.remove('win');
+  ensureAudio();      // starting is a click, so the browser lets us make sound
+  $('overlay').classList.add('hidden');
+  $('end').className = 'card hidden'; $('pick').classList.add('hidden'); cardNav = null; cakeTimers.forEach(clearTimeout); cakeTimers = []; stopMic(); clearInterval(blowHoldTimer); if ($('confetti')) $('confetti').innerHTML = ''; removePoster(); resultsSong(false); stopShots();
+  reset(); mode = 'play';
+  if (clips.music) clips.music.volume = SOUNDS.music.vol;
+  musicOn(true);
+}
+$('sound').onchange = () => {
+  syncMusic();
+  if (!soundOn()) loopOn('drums', false); else if (drumsOn) loopOn('drums', true);
+  if (mode === 'over' && resultsOn) loopOn('results', soundOn());          // pause / resume the results song
+  if (!soundOn()) { pauseShots(); try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch (e) {} }
+  else resumeShots();
+};
+$('go').onclick = start;
+document.querySelector('#start h2').textContent = 'Welcome to Elbaf, ' + PLAYER_NAME + '! 💞🥳💞';
+buildWanoScene();
+setupIntroVideo();                                   // start-menu intro video
+// The first tap is what lets browsers play the video WITH sound, so the start menu opens from a "Tap to begin" screen.
+$('open').onclick = () => {
+  ensureAudio();
+  $('gate').classList.add('hidden'); $('start').classList.remove('hidden'); $('overlay').classList.remove('gated');
+  introPlay();                                                // runs inside the click, so unmuted playback is allowed
+};
+fit();
+reset(); mode = 'attract';
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
