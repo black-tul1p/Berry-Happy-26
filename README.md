@@ -73,4 +73,4 @@ Settings live at the top of the `<script>` in `index.html`: `PLAYER_NAME`, `POST
 
 ## Disclaimer
 
-This is an unofficial, non-commercial fan project made as a personal gift. *One Piece* and its characters belong to Eiichiro Oda, Shueisha and Toei Animation. No affiliation or endorsement is implied. Sound and image assets you add are your responsibility to license.
+This is an unofficial, non-commercial fan project made as a personal gift. *One Piece* and its characters belong to Eiichiro Oda, Shueisha and Toei Animation. No affiliation or endorsement is implied.
